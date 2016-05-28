@@ -1,0 +1,31 @@
+#!/bin/bash
+
+#PBS -l walltime=24:00:00
+#PBS -l nodes=1:ppn=1
+
+# pass in: $code_path, $working_path, $freq, $out_dir
+
+echo "WORKING PATH: "
+echo $working_path
+echo "________"
+cd $working_path
+pwd
+
+# compile:
+gfortran -fno-automatic -o newray $code_path/newray1.8.f 
+gcc -o damping $code_path/damping.c -lm
+
+
+# Run raytracer:
+./newray 
+mv newray.dat newray${freq}.dat
+
+# Run damping:
+./damping $freq newray${freq}.dat 1
+
+mv newray${freq}.dat $out_dir
+mv d${freq}.dat $out_dir
+
+cd $out_dir
+
+rm -r $working_path

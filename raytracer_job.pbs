@@ -1,0 +1,10 @@
+#!/bin/bash
+
+#PBS -l walltime=24:00:00
+#PBS -j oe
+#PBS -l nodes=60:ppn=1
+#PBS -o job_log.txt
+#PBS -N raytracer
+
+mpiexec -np 60 python /shared/users/asousa/WIPP/WIPPv4/make_rays.py
+# mpiexec -np 16 python /shared/users/asousa/WIPP/WIPPv4/mpitest.python
