@@ -17,7 +17,7 @@ from mpi4py import MPI
 
 # Directory to write to:
 
-out_dir =   "/shared/users/asousa/WIPP/WIPPv4/rays/RT2"
+out_dir =   "/shared/users/asousa/WIPP/WIPPv4/rays/130f_60s"
 # path to newray and damping scripts
 code_path = "/shared/users/asousa/WIPP/WIPPv4/codesrc"
 
@@ -37,15 +37,13 @@ freqs = np.round(pow(10, freqs_log))
 # freqs = np.linspace(200, 1000, 4)
 # freqs = np.linspace(1, 130, 130)
 # Length of raytracing, in seconds
-final_TG = 5
+final_TG = 60
 
 
 
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 host = commands.getoutput("hostname")
-
-
 
 
 # Split frequency vector into smaller chunks, pass each chunk to a process
@@ -158,7 +156,7 @@ if (rank < len(chunks)):
       # // Indicates number of ducts in density model.  We usually have 
       # // 1 or 2, because plasmapause is a duct and we had another one 
       # // to make the steepness of electron dropoff accurate.
-      KDUCTS = 4;
+      KDUCTS = 2;
 
       # // File number of results recorded on tape.  If =0, only
       # // lineprinter, if =1, the first file is the program itself.
@@ -194,12 +192,12 @@ if (rank < len(chunks)):
 
       # // Absolute error in integration.  When any of the 5 variables
       # // exceeds 14.2*ABSB and RELB, stepsize is halved.
-      ABSB  = 0.001;
+      ABSB  = 0.0001;
 
       # // Relative error in integration - absolute error divided by the
       # // value. When relative error exceeds 14.2*RELB and absolute 
       # // error, stepsize is halved.
-      RELB  = 1e-5;
+      RELB  = 1e-6;
 
       card.write("%g %g %g %g %g\n"%(EGFEQ, THERM, HM, ABSB, RELB))
 
@@ -238,7 +236,7 @@ if (rank < len(chunks)):
       RDIV  = 6873;
 
       # // Minimum allowed value of integration stepsize
-      HMIN  = 1e-6; #0.001;
+      HMIN  = 1e-8; #0.001;
 
       card.write("%g %g %g %g %g\n"%(RZERO, SCBOT, RSTOP, RDIV, HMIN))
 
@@ -247,7 +245,7 @@ if (rank < len(chunks)):
       # // knee is at LK + DDK
       # // (LK currently defined in consts.h -- aps 11.2015)
 
-      # //  LK  = 5.55;
+      # LK  = 5.55;
       # //LK = 4.61;  // KP = 2
       # //LK = 3.69;  // KP = 4
       # // Moldwin 2002 model of the plasmapause location
@@ -330,14 +328,14 @@ if (rank < len(chunks)):
         (L0,  DEF,  DD,  RDUCLN,  HDUCLN,  
         RDUCUN,  HDUCUN,  RDUCLS,  HDUCLS, 
         RDUCUS,  HDUCUS,  SIDEDU ))
-      card.write("%g %g %g %g %g %g %g %g %g %g %g %g \n"%
-        (L0,  DEF,  DD,  RDUCLN,  HDUCLN,  
-        RDUCUN,  HDUCUN,  RDUCLS,  HDUCLS, 
-        RDUCUS,  HDUCUS,  SIDEDU ))
-      card.write("%g %g %g %g %g %g %g %g %g %g %g %g \n"%
-        (L0,  1.8,  1.8,  RDUCLN,  HDUCLN,  
-        RDUCUN,  HDUCUN,  RDUCLS,  HDUCLS, 
-        RDUCUS,  HDUCUS,  SIDEDU ))
+      # card.write("%g %g %g %g %g %g %g %g %g %g %g %g \n"%
+      #   (L0,  DEF,  DD,  RDUCLN,  HDUCLN,  
+      #   RDUCUN,  HDUCUN,  RDUCLS,  HDUCLS, 
+      #   RDUCUS,  HDUCUS,  SIDEDU ))
+      # card.write("%g %g %g %g %g %g %g %g %g %g %g %g \n"%
+      #   (L0,  1.8,  1.8,  RDUCLN,  HDUCLN,  
+      #   RDUCUN,  HDUCUN,  RDUCLS,  HDUCLS, 
+      #   RDUCUS,  HDUCUS,  SIDEDU ))
 
       # // ------------------  CARD 10: Profile Input --------------------
       # // Altitude step in Earth radii between points on radial profile, 
