@@ -122,10 +122,12 @@ int main(int argc, char *argv[])
 
             } // for(k ... )  N/S - hemisphere
 
-          } // freqs
+      } // freqs
   
   // Compute flux for north and south
   for(k=0; k<2; k++) {
+    NS = (k == 0) ? "N" : "S";
+    printf("Calling compFlux... hemisphere = %s\n",NS);
     compFlux(arrarr[k], L_TARG, k, dir, flux_filename);
   } // N/S - hemisphere
 
@@ -169,15 +171,17 @@ void compFlux(float *arr, double L, int k, char *dir, char *flux_filename)
   sprintf( PhiFile, "%s/phi_%g_%s", dir, L, NS );
   // sprintf( QFile,   "%s/Q_%g_%s", dir, L, NS );
   // sprintf( NFile,   "%s/N_%g_%s", dir, L, NS );
-  // sprintf( alphaFile,   "%s/alpha_%g_%s", dir, L, NS );  
+  sprintf( alphaFile,   "%s/alpha_%g_%s", dir, L, NS );  
 
   printf("writing %s\n", PhiFile);
+
   if( (phiPtr=fopen(PhiFile, "w"))==NULL ) {
     printf("\nProblem opening %s\n", PhiFile);
-   exit(0);
+    exit(0);
    }
 
   if( (alphaPtr=fopen(alphaFile, "w"))==NULL ) {
+    printf("\nProblem opening %s\n", alphaFile);
    exit(0);
   }
 

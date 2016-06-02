@@ -24,8 +24,8 @@
 #define		H_E		5000.0
 
 // Time axis for simulation (axis to be interpolated onto -- not raytracer!)
-#define     T_MAX        20   // T_MAX
-#define     NUM_STEPS    2000
+#define     T_MAX        60   // T_MAX
+#define     NUM_STEPS    6000
 #define     T_STEP       (1.0*((1.0*T_MAX)/NUM_STEPS))
 
 // Width in degrees around center latitude for which we'll load rays
@@ -52,7 +52,7 @@
 // EA array grid settings:
 #define		EALimS		-50.0
 #define		EALimN		50.0
-#define		EAIncr		1
+#define		EAIncr		0.1
 #define     NUMLATS     ((EALimN - EALimS)/EAIncr + 1)
 
 // Width around field line, in L-shells, in which to consider a crossing
@@ -62,7 +62,7 @@
 // #define		EA_SPLIT	1
 // #define		MULT		1 //2.0
 
-#define 	WAVE_PWR_THRESH		1e-6 //1e-6	// minimum wave power (ratio of initial)
+#define 	WAVE_PWR_THRESH		0 //1e-6	// minimum wave power (ratio of initial)
 										// Once a ray is damped to this power, all
 										// subsequent steps are zero.
 
