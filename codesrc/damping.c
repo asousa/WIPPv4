@@ -57,27 +57,27 @@ int		GEOM;
 
 // Store each ray in rayT
 typedef struct {
-  float	tg[NUM_STEPS];		// group time
-  float	distre[NUM_STEPS];     	// geocentric dist in Re
-  float	lat[NUM_STEPS];		// latitude
-  float	delta[NUM_STEPS];      	// angle wrt vert
-  float	t[NUM_STEPS];		// phase time	
-  float	l_sh[NUM_STEPS];       	// local L-shell
-  float	psi[NUM_STEPS];		// angle wrt B-field
-  float	psiray[NUM_STEPS];     	// ray angle wrt B
-  float	psires[NUM_STEPS];     	// res. cone angle wrt B
-  float	mu[NUM_STEPS];		// refr. index
-  float	dens[NUM_STEPS];       	// electron density /cm^3
-  float	anH[NUM_STEPS];		// concentrations of: H+
-  float	anHe[NUM_STEPS];       	//      ,,            He+
-  float	anO[NUM_STEPS];		//      ,,            O+
-  float	fH[NUM_STEPS];		// gyrofreq. in kHz
-  float	stixP[NUM_STEPS];		
-  float	stixR[NUM_STEPS];
-  float	stixL[NUM_STEPS];	
+  float	tg[RAYTRACER_STEPS];		// group time
+  float	distre[RAYTRACER_STEPS];     	// geocentric dist in Re
+  float	lat[RAYTRACER_STEPS];		// latitude
+  float	delta[RAYTRACER_STEPS];      	// angle wrt vert
+  float	t[RAYTRACER_STEPS];		// phase time	
+  float	l_sh[RAYTRACER_STEPS];       	// local L-shell
+  float	psi[RAYTRACER_STEPS];		// angle wrt B-field
+  float	psiray[RAYTRACER_STEPS];     	// ray angle wrt B
+  float	psires[RAYTRACER_STEPS];     	// res. cone angle wrt B
+  float	mu[RAYTRACER_STEPS];		// refr. index
+  float	dens[RAYTRACER_STEPS];       	// electron density /cm^3
+  float	anH[RAYTRACER_STEPS];		// concentrations of: H+
+  float	anHe[RAYTRACER_STEPS];       	//      ,,            He+
+  float	anO[RAYTRACER_STEPS];		//      ,,            O+
+  float	fH[RAYTRACER_STEPS];		// gyrofreq. in kHz
+  float	stixP[RAYTRACER_STEPS];		
+  float	stixR[RAYTRACER_STEPS];
+  float	stixL[RAYTRACER_STEPS];	
   int	numSteps;		// num of steps in this ray
   long	f;			// ray frequency
-  float pwr[NUM_STEPS];	       	// pwr/m^2 @ every point
+  float pwr[RAYTRACER_STEPS];	       	// pwr/m^2 @ every point
 } rayT;
 
 
@@ -210,7 +210,7 @@ FILE  *readFile( char *fileName, FILE *filePtr, rayT *ray, long f)
     }
     // Place the pointer after the header for reading in data
     fseek(filePtr, 146*sizeof(float), SEEK_SET);
-
+    // fseek(filePtr, 289*sizeof(char), SEEK_SET);
   }
 
 
@@ -227,6 +227,7 @@ FILE  *readFile( char *fileName, FILE *filePtr, rayT *ray, long f)
 	      &(ray->stixP[i]), &(ray->stixR[i]), 
 	      &(ray->stixL[i]) ) == EOF ) {
       ray->numSteps=0;
+      printf("end of input file\n");
       return NULL;
     }
     i++;
@@ -236,9 +237,10 @@ FILE  *readFile( char *fileName, FILE *filePtr, rayT *ray, long f)
       break; 
     }
 
-    if(i==NUM_STEPS) {
+    if(i==RAYTRACER_STEPS) {
       i--;	// back up a step, record next step over this one until
 		// eventually it is rewritten by last line & initialised
+    // Editor's note: This case should never be reached (aps 11.2016)
       printf("\nnumber of NUM_STEPS reached\a\n");
     }
 
@@ -248,7 +250,7 @@ FILE  *readFile( char *fileName, FILE *filePtr, rayT *ray, long f)
   // Set the ray frequency 
   ray->f = f;
 
-  printf("\nNow reading, f: %d, lat: %g\n",ray->f, ray->lat[0]);
+  printf("\nLoaded ray at f: %d, lat: %g, length: %d steps\n",ray->f, ray->lat[0], i);
 
   return filePtr; 
 }

@@ -222,7 +222,13 @@ int main(int argc, char *argv[])
   initLatArr(lat_arr);
 
   // Open logfile:
-  logfile = fopen("crossing_log.txt","w");
+  logfile = fopen("/shared/users/asousa/WIPP/WIPPv4/crossing_log.txt","w");
+
+  if (logfile != NULL) {
+    printf("opened logfile\n");
+  } else {
+    printf("logfile failed\n");
+  }
   // ----------------------------------------------------------------
 
   // // ----------------------------------------------------------------
@@ -277,11 +283,12 @@ int main(int argc, char *argv[])
     dampR = (FILE *)readDamp( dampFileR, dampR, &TR, upper_freq);
     
     if(ptrL==NULL || ptrR==NULL) break;
-    // printf("BL.lat[0]: %f, TL.lat[0]: %f]\n",BL.lat[0], TL.lat[0]);
+    printf("BL.lat[0]: %f, TL.lat[0]: %f]\n",BL.lat[0], TL.lat[0]);
 
     // // Only do rays within LAT_SPREAD bounds
     if ( (fabs(BL.lat[0] - center_lat) <= LAT_SPREAD/2.0) &&
          (fabs(TL.lat[0] - center_lat) <= LAT_SPREAD/2.0) ) {
+
       // Scale the raytracing results by incident power
       initPwr(i0, &BL, &TL, &BR, &TR);
 
@@ -300,6 +307,8 @@ int main(int argc, char *argv[])
   free(EA_Arr);
   // ------------------------------------------------------------------
 
+
+  dispLatArr(lat_arr,  logfile);
 
 
   // ---------------- Do the resonance calculation --------------------
@@ -593,7 +602,6 @@ void checkCross(double BL_fact, double TL_fact, double BR_fact,
 
     // printf("%2.3f, %2.3f, %2.3f, %2.3f: %e, %e\n",val1, val2, val3, val4, val1*val2, val3*val4);
 
-
     // // Jacob's crossing condition:
     // val1 = Aray*x1EA + Bray*y1EA + Cray;
     // val2 = Aray*x2EA + Bray*y1EA + Cray;
@@ -714,6 +722,7 @@ void calcRes(cellT *lat_arr[][NUM_TARGS], long lower_freq)
   for(i=0; i<NUM_E; i++) {
     E_tot_arr[i] = pow(10, (E_EXP_BOT+ DE_EXP*i) ); // energy in eV
     v_tot_arr[i] = C*sqrt(1 - pow( (E_EL/(E_EL+E_tot_arr[i])) ,2) );
+    // printf("%e ",v_tot_arr[i]);
   }
 
   //initialize the Alpha output arrays (prevents having empty pN, pS files)
@@ -742,6 +751,8 @@ void calcRes(cellT *lat_arr[][NUM_TARGS], long lower_freq)
       (1/(slat_term*slat_term) + 2/(clat*clat));
 
 
+
+
     // for(kk=0; kk < EA_SPLIT; kk++) {
     //   latk = (lat-.5*EAIncr+.5*EAIncr/EA_SPLIT)+kk*(EAIncr/EA_SPLIT);
     //   getFltConst(L,latk,alpha_eq,&(flt_const_N[kk]),&(flt_const_S[kk]));
@@ -758,7 +769,7 @@ void calcRes(cellT *lat_arr[][NUM_TARGS], long lower_freq)
 
     dv_para_ds = -0.5*pow(salph,2)/calph/wh*dwh_ds;
     
-    printf("EA at lat: %2.2f\n", lat);
+    printf("------------- EA at lat: %2.2f ---------------\n", lat);
     //printf("lat: %g, wh: %g, dwh_ds: %g, flt_const_N: %g \n",
     //     lat, wh, dwh_ds, flt_const_N);
     //printf("flt_const_S: %g, alpha_lc: %g, \nds: %g, dv_para_ds: %g\n", 
@@ -771,9 +782,10 @@ void calcRes(cellT *lat_arr[][NUM_TARGS], long lower_freq)
       t = next->t + T_STEP/2;   // We want the time and freq to be in the 
       f = next->f + F_STEP/2;   // center of the cell, so add DT/2 or DF/2
       pwr = (next->pwr)/(next->num_rays)/(T_STEP); // <-I know this looks wrong 
-      psi = (next->psi)/(next->num_rays)*D2R;   // but it's right!
-                        // Grrr... back off!
+      psi = (next->psi)/(next->num_rays)*D2R;      // but it's right!
+                                                   // Grrr... back off!
       // printf("\npwr: %e\n",pwr);
+      // printf("t: %g psi: %g pwr: %g num_rays: %i\n",t, R2D*psi, pwr, next->num_rays);
       // printf("num_rays: %d\n",next->num_rays);
       // printf("DT: %2.3f\n",DT);
       if(pwr > 1.0e-50) {
@@ -786,7 +798,7 @@ void calcRes(cellT *lat_arr[][NUM_TARGS], long lower_freq)
       stixL =   (next->stixL)/(next->num_rays);
       
       // printf("t: %g, f: %g, pwr: %g, psi: %g,\nmu: %g, stixP: %g, stixR: %g, stixL: %g \n\n", t, f, pwr, psi, mu, stixP, stixR, stixL);
-      
+      printf("t: %g, f: %g, pwr: %g, psi: %g, Num_rays: %d\n",t,f,pwr, R2D*psi, next->num_rays);
       
       spsi = sin(psi);
       cpsi = cos(psi);
@@ -806,6 +818,7 @@ void calcRes(cellT *lat_arr[][NUM_TARGS], long lower_freq)
       stixB = stixP*stixS+stixR*stixL+(stixP*stixS-stixR*stixL)*cpsi_sq;
       stixX = stixP/(stixP- mu_sq*spsi_sq);
       
+      // printf("t: %g f: %g\n",t, w/(2*PI));
 
 
       rho1=((mu_sq-stixS)*mu_sq*spsi*cpsi)/(stixD*(mu_sq*spsi_sq-stixP));
@@ -822,22 +835,7 @@ void calcRes(cellT *lat_arr[][NUM_TARGS], long lower_freq)
 
     // printf("\nt: %2.3f, f: %g, pwr: %g, Byw_sq: %e\n",t,f,pwr,Byw_sq);
 
-      //printf("\n2*mu0/c: %g, pwr*stixX*stixX: %g, \n mu*fabs(cosi): %g\n",
-      //       (2.0*MU0/C),(pwr*stixX*stixX),(mu*fabs(cpsi)));
-      
-      //printf("pow( ((spsi/cpsi)-rho1*rho2) ,2): %g,
-      //        \npow( (1+rho2*rho2*stixX)  ,2): %g, sqrt: %g\n",
-      //     (pow( ((spsi/cpsi)-rho1*rho2) ,2)), 
-      //     pow((1+rho2*rho2*stixX), 2),  
-      //      sqrt(pow(((spsi/cpsi)-rho1*rho2),2)+pow((1+rho2*rho2*stixX),2)) );
-      
-      //printf("\nByw_sq: %g, rho1: %g, rho2: %g, \nstixS: %g, stixB: %g\n", 
-      //       Byw_sq, rho1, rho2, stixS, stixB);
-      
-      //printf("\nn_x: %g, n_z: %g, stixX: %g, stixD: %g, stixA: %g,
-      //mu_sq: %g\n", 
-      //       n_x, n_z, stixX, stixD, stixA, mu_sq);
-      
+ 
       // get all RMS wave components
       
       Byw = sqrt(Byw_sq);
@@ -846,17 +844,10 @@ void calcRes(cellT *lat_arr[][NUM_TARGS], long lower_freq)
       Ezw = fabs(Exw *n_x*n_z / (n_x*n_x - stixP));
       Bxw = fabs(Exw *stixD*n_z /C/ (stixS - mu_sq));
       Bzw = fabs((Exw *stixD *n_x) /(C*(stixX - mu_sq)));
-      
-      /* printf("\nExw: %g, stixD: %g, n_x: %g, prod: %g\n", 
-     Exw, stixD, n_x, (Exw*stixD*n_x) );
-     printf("\nC: %g, stixX: %g, mu_sq: %g, prod: %g\n",
-     C, stixX, mu_sq, (C*(stixX-mu_sq)) );
-     printf("div: %g, fabs: %g\n",
-     ((Exw *stixD *n_x) /(C*(stixX - mu_sq))), 
-     fabs((Exw *stixD *n_x) /(C*(stixX - mu_sq))));
-     printf("Bxw: %g, Byw: %g, Bzw: %g, \nExw: %g, Eyw: %g, Ezw: %g\n", 
-     Bxw, Byw, Bzw, Exw, Eyw, Ezw);
-      */
+      // printf("\nn_x: %g, n_z: %g, stixX: %g, stixD: %g, stixA: %g, stixB: %g, mu_sq: %g\n", n_x, n_z, stixX, stixD, stixA, stixB, mu_sq);
+    printf("Byw: %g Exw: %g Eyw: %g Ezw: %g Bxw: %g Bzw: %g\n",
+              Byw,    Exw,    Eyw,    Ezw,    Bxw,    Bzw);
+
       // Oblique integration quantities
       R1 = (Exw + Eyw)/(Bxw+Byw);
       R2 = (Exw - Eyw)/(Bxw-Byw);
@@ -897,6 +888,7 @@ void calcRes(cellT *lat_arr[][NUM_TARGS], long lower_freq)
         if(e_endi<0) e_endi=0;
         if(e_starti<0) e_starti=0;
         
+        // printf("dir: %g t1: %g t2: %g t3: %g\n",direction, t1, t2, t3);
 
         // begin V_TOT loop here
         for(e_toti=e_starti; e_toti < e_endi; e_toti++) {
@@ -947,13 +939,15 @@ void calcRes(cellT *lat_arr[][NUM_TARGS], long lower_freq)
               w/(2.0*v_para_star_sq)*dv_para_ds ;
 
 
-            BB = mres/(gamma*v_para_star)*wh - 
-              mres/(gamma*v_para_star)*dwh_ds*(ds/2.0) -
-              w/v_para_star - kz;
+            // ORIGINAL LINE FROM JACOB'S CODE
+            // BB = mres/(gamma*v_para_star)*wh - 
+            //   mres/(gamma*v_para_star)*dwh_ds*(ds/2.0) -
+            //   w/v_para_star - kz;
 
-            //      printf("\nAA: %g, BB: %g, v_para_star: %g\n", 
-            //     AA, BB, v_para_star);
-
+            // THIS ONE MATCHES THE THESIS -- aps 11.2016
+            BB =   mres*wh/(gamma*v_para_star)
+                 - mres/(gamma*v_para_star)*dwh_ds*(ds/2.0) * (w/v_para_star)*kz;
+            
             // MATLAB code
             //aa1 = mres/2./v_para_star/gammaiA.*dwhi_ds.* ...
             //  (1+dsiA./2./v_para_star.*dv_para_ds) - ...
@@ -983,6 +977,9 @@ void calcRes(cellT *lat_arr[][NUM_TARGS], long lower_freq)
 
           // printf("dalpha_eq: %e\n",dalpha_eq);
             
+            if (isnan(dalpha_eq)) {
+              printf("isnans: w1: %g\n",w1);
+            }
           }
           // for(kk=0; kk<EA_SPLIT; kk++) {
           //   if(direction>0) {
@@ -1004,7 +1001,7 @@ void calcRes(cellT *lat_arr[][NUM_TARGS], long lower_freq)
                 direction*e_toti, dalpha_eq);
           // printf("e_toti = %d\n",e_toti);
         
-
+          // printf("%d: da: %g\n",e_toti, dalpha_eq);
 
          
         } // v_para
@@ -1209,6 +1206,10 @@ double ltgPwr(float i0, float center_lat, float dlat, float dfreq, long f,
   S_vert = S_vert * attn_factor ;
 
   // printf("F: %ld\n",f);
+  printf("\ni0: %2.3f,  f: %ld, dist_tot: %2.3f, xi: %2.3f, S_vert: %e dlat: %2.3f dfreq: %2.3f\n",
+            i0,         f,      dist_tot,        xi,        S_vert,   dlat,       dfreq);
+ 
+  printf("returned power: %g\n",  S_vert * dlat*D2R*(R_E+H_IONO) * dfreq * 0.87788331);
   // printf("\ni0: %2.3f, center_lat: %2.3f, dlat: %2.3f, dfreq: %2.3f, f: %ld, lat: %2.3f, dlong: %2.3f, S_vert: %e\n",
   //           i0,        center_lat,        dlat,         dfreq,       f,      lat,        dlong,        S_vert);
 
@@ -1216,6 +1217,7 @@ double ltgPwr(float i0, float center_lat, float dlat, float dfreq, long f,
   // Integrate wrt space, assume slice-width=1m.  The correction 
   // factor 0.877... comes about so that its a 1m slice at 1000km
   // which means that at 100km its only 0.877m wide
+
   return ( S_vert * dlat*D2R*(R_E+H_IONO) * dfreq * 0.87788331); 
 }
 
@@ -1447,6 +1449,8 @@ double *initEA_Arr(void)
     EA_c = x1*y2 - y1*x2;
     
     EA_length = sqrt( (x1-x2)*(x1-x2)+(y1-y2)*(y1-y2) )*R_E;  
+    printf("lat: %g EA_length: %g\n",lam, EA_length);
+
     
     // printf("\nEA_lat: %2.3f, EA_length: %e\n",lam,EA_length);
     writeEntry(i, 0, lam, arrPtr);
@@ -2088,7 +2092,7 @@ void Fresnel(double x0, double *FS, double *FC)
   if(x<=1.6) {
 
     *FS =   sn[0]*pow(x,3) +  // it takes longer to write this out
-      sn[1]*pow(x,7) +  // but we save valuable CPU cycles!
+      sn[1]*pow(x,7) +        // but we save valuable CPU cycles!
       sn[2]*pow(x,11) + 
       sn[3]*pow(x,15) + 
       sn[4]*pow(x,19) + 

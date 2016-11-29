@@ -12,6 +12,7 @@
  *  -Deleted alpha file stuff (no resuming)
  */ 
 
+#define   NAPe    2.71828182845905
 
 // -----------------------------------------------
 // GLOBAL VARIABLES:
@@ -35,6 +36,7 @@ double beta5[] = {  0.2369268851,
             0.56888888889, 
             0.2369268851,
             0.4786286745    };
+
 
 
 // -----------------------------------------------
@@ -153,7 +155,7 @@ void compFlux(float *arr, double L, int k, char *dir, char *flux_filename)
   int ei, ti, i, nout;
   double mag, P, Q, epsm, alpha_eq, v, crunch;
   double I=0.0, x, g, field, Phi_p, b=1.0, vcm, fcgs;
-  double v_tot_arr[NUM_E], E_tot_arr[NUM_E], gamma;
+  double v_tot_arr[NUM_E], E_tot_arr[NUM_E], dE_arr[NUM_E], gamma;
   double Jdiff[NUM_E];
   float Phi_float, alpha, J[100][100];
   char *NS, PhiFile[128], QFile[128], NFile[128], alphaFile[128];
@@ -169,8 +171,8 @@ void compFlux(float *arr, double L, int k, char *dir, char *flux_filename)
   if(k==0) {NS = "N";} else {NS="S";}  
 
   sprintf( PhiFile, "%s/phi_%g_%s", dir, L, NS );
-  // sprintf( QFile,   "%s/Q_%g_%s", dir, L, NS );
-  // sprintf( NFile,   "%s/N_%g_%s", dir, L, NS );
+  sprintf( QFile,   "%s/Q_%g_%s", dir, L, NS );
+  sprintf( NFile,   "%s/N_%g_%s", dir, L, NS );
   sprintf( alphaFile,   "%s/alpha_%g_%s", dir, L, NS );  
 
   printf("writing %s\n", PhiFile);
@@ -199,6 +201,12 @@ void compFlux(float *arr, double L, int k, char *dir, char *flux_filename)
     E_tot_arr[i] = pow(10, (E_EXP_BOT+(DE_EXP/2)+DE_EXP*i) ); //E in eV
     Jdiff[i] = getJdiff( J, E_tot_arr[i], alpha_eq );
     v_tot_arr[i] = C*sqrt(1 - pow( (E_EL/(E_EL+E_tot_arr[i])) ,2) );
+
+    // Energy differential dE in keV
+    dE_arr[i] = 1e-3 * pow(10, (E_EXP_BOT+ (DE_EXP/2))) * 
+      exp(DE_EXP*i / log10(NAPe)) * DE_EXP / log10(NAPe);
+
+
   }
 
   for(ei=0; ei<NUM_E; ei++) {
@@ -232,41 +240,33 @@ void compFlux(float *arr, double L, int k, char *dir, char *flux_filename)
       
       alpha = sqrt( arr[ei*NUM_STEPS+ti] );
 
-      
-
       nout=fwrite(&alpha, sizeof(float), 1, alphaPtr);      
 
       mag = 1.4142135623731*alpha;  // sqrt(2)*alpha_RMS = peak
       
-      P = mag/2;    //[ alpha_lc - (alpha_lc-mag) ] /2
-      Q = alpha_eq - mag/2; //[ alpha_lc + (alpha_lc-mag) ] /2
+      P = mag/2;             //[ alpha_lc - (alpha_lc-mag) ] /2
+      Q = alpha_eq - mag/2;  //[ alpha_lc + (alpha_lc-mag) ] /2
       
       I = 0.0;
       if(mag != 0) {
        for(i=0; i<5; i++) {
          x = P*t5[i] + Q ;
 
-         // ------------- Austin's edits: Trying to fix NaNs being
-         //               thrown by asin() function
-   
-
           if(ALPHA_DISTRIBUTION) {
-
-
 
            g = (P/PI)*sin(2.0*x)*(  asin((x-alpha_eq)/mag)+ (PI/2.0) );
 
-            } else {
-
+          } else {
            
             g = (P/PI)*sin(2.0*x)*((x - alpha_eq)*( asin((x-alpha_eq)/mag)+ (PI/2.0) ) +
                sqrt(mag*mag-pow((x-alpha_eq),2)));
+
           }; // Square
 
        I += ( beta5[i]*g );
-
        } // for(i ... ) -> Gauss quad integration
       } // if mag != 0
+
       Phi_p = PI*crunch*b*I;
       Phi_float = ( float ) Phi_p;
 
@@ -288,17 +288,26 @@ void compFlux(float *arr, double L, int k, char *dir, char *flux_filename)
 
   printf("Total NaNs: %i\n",nancounter);
 
-  // Now calculate Q and N
-  //
-  // Need to integrate over E
-  //for(ti=0; ti<NUM_TIMES; ti++) {
-  //  for(ei=0; ei<NUM_E; ei++) {
-  //    } // ei
-  // }  // ti
+
+//   /// HEY AUSTIN, YOU HAVEN'T TESTED THIS PART YET (6.2.2016)
+//   // Now calculate Q and N
+//   // Need to integrate over E
+//   for(ti=0; ti<NUM_TIMES; ti++) {
+//    for(ei=0; ei<NUM_E; ei++) {
+//       Qarr[ti] += (float)( Phi_p * E_tot_arr[ei] * dE_arr[ei] * 1.602e-9);
+//       Narr[ti] += (float)( Phi_p * dE_arr[ei]); //eV->keV\
+//      } // ei
+//   }  // ti
+
+//   nout=fwrite(Qarr, sizeof(float), (NUM_TIMES), QPtr);
+//   if(nout!=NUM_LONGS*NUM_TIMES) printf("\n\aProblem writing Q\n");
+//   nout=fwrite(Narr, sizeof(float), (NUM_TIMES), NPtr);
+//   if(nout!=NUM_LONGS*NUM_TIMES) printf("\n\aProblem writing N\n");
+
+//   fclose(QPtr);
+//   fclose(NPtr);
 
 }
-
-
 
 /*
  * FUNCTION: getJdiff

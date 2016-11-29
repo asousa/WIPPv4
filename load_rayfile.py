@@ -50,10 +50,18 @@ def load_rayfile(directory, frequency):
     # Load damping file:
     damp = pd.read_csv(os.path.join(directory,damping_name),header=None,delim_whitespace=True)
 
-    di9_inds = damp[damp[0]==99999].index
+    # Damping is a little different -- machine stop only at end of each vector.
+    di9_inds = np.array(damp[damp[0]==99999].index).flatten()
+    di9_inds = np.insert(di9_inds, 0, -1, axis=0)   # Add this so we get a starting index at 0
+    dk1 = di9_inds[:-1] + 1
+    dk2 = di9_inds[1:]
+
+    # print np.shape(k1)
+    # print np.shape(dk1)
+
 
     df['power'] = damp.shift(i9_inds[0] + 1)
-    df.scaled = False # Have we scaled the power yet, or is it just the damping vector?
+    # df.scaled = False # Have we scaled the power yet, or is it just the damping vector?
 
 
     # Tidy up all the rays into a dictionary of dataframes:
@@ -64,7 +72,12 @@ def load_rayfile(directory, frequency):
         ray_dict[(df.iloc[k1[x]].lat)].launch_lat  = df.iloc[k1[x]].lat
         ray_dict[(df.iloc[k1[x]].lat)].frequency  = frequency
         
-    #print ray_dict.keys()
+        # ray_dict[(df.iloc[k1[x]].lat)].power = np.zeros(k2[x]-k1[x])    
+        ray_dict[df.iloc[k1[x]].lat].power = df.power.iloc[k1[x]:k2[x]]
+        # print damp.iloc[dk1[x]:dk2[x]]
+        # print "Ksize: ", k2[x]-k1[x], "Dsize: ", dk2[x] - dk1[x]
+
+
     return ray_dict
     #return df, k1, k2
 

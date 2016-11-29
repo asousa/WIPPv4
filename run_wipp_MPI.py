@@ -31,8 +31,9 @@ do_flux       = False
 
 # Frequencies to do:
 # freqs = [200,240,289,347,418,502,603,725,872,1048,1259,1514,1819,2187,2629,3160,3798,4565,5487,6596,7928,9530,11455,13769,16550,19893,23912,28742,34549,41528,49916,60000]
-freqs_log = np.linspace(np.log10(200), np.log10(60000), 130)
-freqs = np.round(pow(10, freqs_log))
+freqs = [1000, 1100]
+#freqs_log = np.linspace(np.log10(200), np.log10(60000), 130)
+#freqs = np.round(pow(10, freqs_log))
 
 
 freq_pairs = zip(freqs[0:], freqs[1:])
@@ -42,27 +43,29 @@ freq_pairs = zip(freqs[0:], freqs[1:])
 # cs = coordinate_structure(out_lats, [0], [100],'geomagnetic')
 # cs.transform_to('L_dipole')
 # L_targ_list = cs.L()
-L_targ_list = [ 1.33, 1.36, 1.4,  1.45, 1.49, 1.54, 1.59, 1.65,
-                1.72, 1.78, 1.86, 1.94, 2.03, 2.13, 2.23, 2.35,
-                2.48, 2.63, 2.79, 2.96, 3.16, 3.38, 3.63, 3.92,
-                4.24, 4.61, 5.03, 5.53, 6.1,  6.78, 7.58, 8.54 ]
+L_targ_list = [2.422]
+# L_targ_list = [ 1.33, 1.36, 1.4,  1.45, 1.49, 1.54, 1.59, 1.65,
+#                 1.72, 1.78, 1.86, 1.94, 2.03, 2.13, 2.23, 2.35,
+#                 2.48, 2.63, 2.79, 2.96, 3.16, 3.38, 3.63, 3.92,
+#                 4.24, 4.61, 5.03, 5.53, 6.1,  6.78, 7.58, 8.54 ]
 # L_targ_list = [1.33, 1.37, 1.41, 1.45, 1.49, 1.54, 1.59, 1.64, 1.70, 1.77, 1.84, 1.92, 2.00, 2.09, 2.19, 2.30, 2.42, 2.55, 2.70, 2.86, 3.04, 3.24, 3.46, 3.72, 4.00, 4.32, 4.69, 5.11, 5.60, 6.17, 6.83, 7.61, 8.55]
 
 # Input latitudes to launch from:
 # in_lat = 35.0
 # center_lats = np.arange(5,65,step=5)
-center_lats = [25]
-
+#center_lats = [5, 10, 15, 20, 30]
+# center_lats = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60]
+center_lats = [45]
 # Input power to do:
 I0_list    = [-100000.0]
 
 # Relevant paths:
 root_dir = '/shared/users/asousa/WIPP/WIPPv4/'
 code_dir = os.path.join(root_dir,'codesrc')
-ray_dir  = '/shared/users/asousa/WIPP/WIPPv4/rays/130f_60s' # Location of ray files
+ray_dir  = '/shared/users/asousa/WIPP/WIPPv4/rays/3dWIPP_comparison' # Location of ray files
 out_dir  = os.path.join(root_dir,'outputs')                 # Where to assemble final results
-log_dir  = os.path.join(out_dir, 'logs')                    # Where to write log files
-local_dir= os.path.join(os.path.expanduser("~"),'scatter_tmp') # Local directory on each node
+log_dir  = os.path.join(out_dir, 'logs_3dcomp')                    # Where to write log files
+local_dir= os.path.join(os.path.expanduser("~"),'scatter_comp') # Local directory on each node
 
 
 
@@ -75,7 +78,16 @@ comm.Barrier()
 
 if do_scattering:
   # Generate task list:
-  tasklist = [(w,x,y,z) for w,x,y,z in itertools.product(I0_list, center_lats, L_targ_list, freq_pairs)]
+  if rank == 0:
+    tasklist = [(w,x,y,z) for w,x,y,z in itertools.product(I0_list, center_lats, L_targ_list, freq_pairs)]
+    # Adjacent frequencies take similar time to complete... shuffle to distribute nicely
+    np.random.shuffle(tasklist)
+  else:
+    tasklist = None
+
+  tasklist = comm.bcast(tasklist, root=0)
+
+  # tasklist = [(w,x,y,z) for w,x,y,z in itertools.product(I0_list, center_lats, L_targ_list, freq_pairs)]
 
   # Segment task list for each node:
   nTasks = 1.0*len(tasklist)
@@ -119,6 +131,7 @@ if do_scattering:
   # Run each set of jobs on current node:
   if (rank < len(chunks)):
     print "Process %d on host %s, doing %g jobs"%(rank, host, len(chunks[rank]))
+    # print chunks[rank]
 
     for job in chunks[rank]:
       I0 = job[0]
@@ -150,12 +163,16 @@ if do_scattering:
       job_cmd = "./calc_scattering %s %s %s %s %s %g" %(ray_dir, I0, center_lat, f_low, f_high, L_targ)
       print "Job command: ",job_cmd
 
-      runlog = subprocess.check_output(job_cmd,shell=True)
-      # print runlog
-      # os.system(job_cmd)
-      # write output log:
+      # runlog = subprocess.check_output(job_cmd,shell=True)
+      # # print runlog
+      # # os.system(job_cmd)
+      # # write output log:
+      # file = open(os.path.join(log_dir,'scatter_%g_%g_%g_%g.log'%(I0, center_lat, L_targ, f_low)),'w+')
+      # file.write(runlog)
+      # file.close()
+
       file = open(os.path.join(log_dir,'scatter_%g_%g_%g_%g.log'%(I0, center_lat, L_targ, f_low)),'w+')
-      file.write(runlog)
+      subprocess.call(job_cmd, shell=True, stdout=file)
       file.close()
 
       # Move compiled files to out dir
@@ -231,11 +248,17 @@ if do_flux:
       print "Job command: ", job_cmd
 
       # os.system(job_cmd)
-      runlog = subprocess.check_output(job_cmd, shell=True)
+      # runlog = subprocess.check_output(job_cmd, shell=True)
+
+      # file = open(os.path.join(log_dir,'flux_%g_%g_%g.log'%(I0, center_lat, L_targ)),'w+')
+      # file.write(runlog)
+      # file.close()
 
       file = open(os.path.join(log_dir,'flux_%g_%g_%g.log'%(I0, center_lat, L_targ)),'w+')
-      file.write(runlog)
+      subprocess.call(job_cmd, shell=True, stdout=file)
       file.close()
+
+      print "Completed: %s, %s"%(center_lat, L_targ)
 
       # Move completed files over to shared directory:
       # os.system("mv phi* %s"%(scatter_dir))

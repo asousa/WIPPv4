@@ -8,7 +8,7 @@ import numpy as np
 import commands
 
 import subprocess
-
+from partition import partition
 from mpi4py import MPI
 
 # Apologies for the terrible naming conventions.
@@ -17,7 +17,7 @@ from mpi4py import MPI
 
 # Directory to write to:
 
-out_dir =   "/shared/users/asousa/WIPP/WIPPv4/rays/130f_60s"
+out_dir =   "/shared/users/asousa/WIPP/WIPPv4/rays/3dWIPP_comparison"
 # path to newray and damping scripts
 code_path = "/shared/users/asousa/WIPP/WIPPv4/codesrc"
 
@@ -26,18 +26,26 @@ log_dir = os.path.join(out_dir, 'logs')
 qq = 'batchnew'
 
 # Latitudes to do:
-LATITUDES = np.arange(0,80, step=0.5)
-
+# LATITUDES = np.arange(0,80, step=0.5)
+# LATITUDES = [40, 41]
 # # # # Frequencies to do:
-freqs_log = np.linspace(np.log10(200), np.log10(60000), 130)
-freqs = np.round(pow(10, freqs_log))
+#freqs_log = np.linspace(np.log10(200), np.log10(60000), 130)
+#freqs = np.round(pow(10, freqs_log))
+# freqs = [1000, 1100]
 
 
+LATITUDES = np.arange(10, 60, 1) #[40, 41, 42, 43]
+
+
+f1 = 200; f2 = 30000;
+num_freqs = 32
+flogs = np.linspace(np.log10(f1), np.log10(f2), num_freqs)
+freqs = np.round(pow(10, flogs)/10.)*10
 
 # freqs = np.linspace(200, 1000, 4)
 # freqs = np.linspace(1, 130, 130)
 # Length of raytracing, in seconds
-final_TG = 60
+final_TG = 10
 
 
 
@@ -55,8 +63,8 @@ nSteps = np.ceil(nFreqs/nProcs).astype(int)
 # Shuffle the frequency vector (adjacent frequencies take about as long to run)
 # np.random.shuffle(freqs)
 
-chunks = [freqs[i:i+nSteps] for i in range(0, len(freqs), nSteps)]
-
+# chunks = [freqs[i:i+nSteps] for i in range(0, len(freqs), nSteps)]
+chunks = partition(freqs, nProcs)
 
 
 # print "Subprocess %s on %s:"%(rank, host)
@@ -156,14 +164,14 @@ if (rank < len(chunks)):
       # // Indicates number of ducts in density model.  We usually have 
       # // 1 or 2, because plasmapause is a duct and we had another one 
       # // to make the steepness of electron dropoff accurate.
-      KDUCTS = 2;
+      KDUCTS = 4 #4;
 
       # // File number of results recorded on tape.  If =0, only
       # // lineprinter, if =1, the first file is the program itself.
       KTAPE = 1;
 
       # // No description: maybe reference altitude of some sort?
-      REFALT = 200;
+      REFALT =  200;
 
       # // Density reference point - range in L shell 
       DSRRNG  = 2;
@@ -172,7 +180,7 @@ if (rank < len(chunks)):
       DSRLAT  = 0;
 
       # // Density reference point - el/cc @ reference point
-      DSRDENS = 2500;
+      DSRDENS = 2000 #2500;
 
       card.write("%g %g %g %g %g %g %g %g %g %g\n"% 
         (NUM, KSKIP, MODE, KOUNT, KDUCTS, KTAPE, REFALT, 
@@ -184,7 +192,7 @@ if (rank < len(chunks)):
       EGFEQ = 880;
 
       # // Temperature used in the diffusive equilibrium density model
-      THERM = 1600;
+      THERM = 11600 #1600;  1 ev = 1.602e-19 / (boltzman const, 1.38e-23)
 
       # // Initial integration stepsize H = 50*HM/sqrt(f), except below
       # // RDIV, where H is 1/16 of this value
@@ -258,7 +266,7 @@ if (rank < len(chunks)):
       EXPK  = 0.13;
 
       # // Halfwidth in L of the knee
-      DDK = 0.07;
+      DDK = 0.2 #0.07;
 
       # // Geocentric distance (km) where density outside the knee is 
       # // equal to the density inside (???).  Modeil is not good 
@@ -294,7 +302,7 @@ if (rank < len(chunks)):
 
       # // Radial scale height of duct, with which the LOWER end merges 
       # // into the background plasma
-      HDUCLN  = 20;
+      HDUCLN  = 20000 #20;
 
       # // Geocentric radius of the upper end of the duct.  If it extends 
       # // to equator, set = 6370*L0 - In the NORTH
@@ -323,19 +331,29 @@ if (rank < len(chunks)):
       # // DEF, like a recovery region.
       SIDEDU  = 1;
 
-      # // //DUCT 1
+      # // These 3 ducts seem to be important 1-sided shelves
+      # to make the density curve line up correctly.
+
       card.write("%g %g %g %g %g %g %g %g %g %g %g %g \n"%
         (L0,  DEF,  DD,  RDUCLN,  HDUCLN,  
         RDUCUN,  HDUCUN,  RDUCLS,  HDUCLS, 
         RDUCUS,  HDUCUS,  SIDEDU ))
+      card.write("%g %g %g %g %g %g %g %g %g %g %g %g \n"%
+        (L0,  DEF,  DD,  RDUCLN,  HDUCLN,  
+        RDUCUN,  HDUCUN,  RDUCLS,  HDUCLS, 
+        RDUCUS,  HDUCUS,  SIDEDU ))
+      card.write("%g %g %g %g %g %g %g %g %g %g %g %g \n"%
+        (L0,  1.8,  1.8,  RDUCLN,  HDUCLN,  
+        RDUCUN,  HDUCUN,  RDUCLS,  HDUCLS, 
+        RDUCUS,  HDUCUS,  SIDEDU ))
+
+      # # Hey Austin, here's an example of a duct that works.
+      # If adding more, don't forget to go back up and set KDUCTS!
+
       # card.write("%g %g %g %g %g %g %g %g %g %g %g %g \n"%
-      #   (L0,  DEF,  DD,  RDUCLN,  HDUCLN,  
+      #   (4,  100,  0.05,  RDUCLN,  HDUCLN,  
       #   RDUCUN,  HDUCUN,  RDUCLS,  HDUCLS, 
-      #   RDUCUS,  HDUCUS,  SIDEDU ))
-      # card.write("%g %g %g %g %g %g %g %g %g %g %g %g \n"%
-      #   (L0,  1.8,  1.8,  RDUCLN,  HDUCLN,  
-      #   RDUCUN,  HDUCUN,  RDUCLS,  HDUCLS, 
-      #   RDUCUS,  HDUCUS,  SIDEDU ))
+      #   RDUCUS,  HDUCUS,  0 ))
 
       # // ------------------  CARD 10: Profile Input --------------------
       # // Altitude step in Earth radii between points on radial profile, 
@@ -444,8 +462,9 @@ if (rank < len(chunks)):
     # Rename output 
     os.system("mv newray.dat newray%d.dat"%(freq))
 
-    # Run damping
-    # os.system("./damping %d newray%d.dat 1"%(freq, freq))
+    # # Run damping
+    # # os.system("./damping %d newray%d.dat 1"%(freq, freq))
+    # print "./damping %d newray%d.dat 1"%(freq, freq)
     damplog = subprocess.check_output("./damping %d newray%d.dat 1"%(freq, freq),shell=True)
 
     # Log the output from the damping code
@@ -456,9 +475,11 @@ if (rank < len(chunks)):
     # Move final results up to the root dir
     os.system("mv newray%d.dat %s"%(freq, out_dir))
     os.system("mv d%d.dat %s"%(freq, out_dir))
+    os.system("mv Lprofile.dat %s/Lprofile_%s.dat"%(out_dir,freq))
 
+    print "finished with %s"%freq
     # Move out, clean up
     os.chdir(out_dir)
-    os.system("rm -r %s"%(working_path))
+    #os.system("rm -r %s"%(working_path))
 
 

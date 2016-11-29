@@ -1,10 +1,20 @@
 #!/bin/bash
 
-#PBS -l walltime=24:00:00
+#!/bin/bash
+#PBS -l walltime=72:00:00
 #PBS -j oe
-#PBS -l nodes=60:ppn=1
-#PBS -o job_log.txt
-#PBS -N raytracer
+#PBS -l nodes=32:ppn=1
+#PBS -o ray_job.txt
+#PBS -N legacy_raytracer
+#PBS -q batchnew
 
-mpiexec -np 60 python /shared/users/asousa/WIPP/WIPPv4/make_rays.py
-# mpiexec -np 16 python /shared/users/asousa/WIPP/WIPPv4/mpitest.python
+#  --mca btl_tcp_if_include p3p2 tells batchnew nodes which network interface to use
+#    batch is infiniband (ib0?), batchnew is just a private ethernet network
+# mpiexec -np 56 --mca btl_tcp_if_include p3p2 python /shared/users/asousa/WIPP/WIPPv4/run_wipp_MPI.py
+
+
+mpi=/usr/local/bin/mpirun # Which MPI to run
+pyt=/shared/users/asousa/software/python2/bin/python
+cmd=/shared/users/asousa/WIPP/WIPPv4/make_rays.py
+
+$mpi --mca btl_tcp_if_include p3p2 $pyt $cmd
