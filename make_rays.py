@@ -17,7 +17,7 @@ from mpi4py import MPI
 
 # Directory to write to:
 
-out_dir =   "/shared/users/asousa/WIPP/WIPPv4/rays/3dWIPP_comparison"
+out_dir =   "/shared/users/asousa/WIPP/WIPPv4/rays/33f_kp4"
 # path to newray and damping scripts
 code_path = "/shared/users/asousa/WIPP/WIPPv4/codesrc"
 
@@ -38,14 +38,14 @@ LATITUDES = np.arange(10, 60, 1) #[40, 41, 42, 43]
 
 
 f1 = 200; f2 = 30000;
-num_freqs = 32
+num_freqs = 33
 flogs = np.linspace(np.log10(f1), np.log10(f2), num_freqs)
 freqs = np.round(pow(10, flogs)/10.)*10
 
 # freqs = np.linspace(200, 1000, 4)
 # freqs = np.linspace(1, 130, 130)
 # Length of raytracing, in seconds
-final_TG = 10
+final_TG = 30
 
 
 
@@ -252,13 +252,14 @@ if (rank < len(chunks)):
       # // L-value of inner edge of the plasmapause, center of the 
       # // knee is at LK + DDK
       # // (LK currently defined in consts.h -- aps 11.2015)
-
+      Kp = 4.0;
       # LK  = 5.55;
       # //LK = 4.61;  // KP = 2
       # //LK = 3.69;  // KP = 4
       # // Moldwin 2002 model of the plasmapause location
-      # //LK = 5.39 - 0.382*Kp;
-      LK = 5.39;
+      LK = 5.39 - 0.382*Kp;
+
+      # LK = 5.39;
 
 
       # // Exponential component of density decrease beyond the knee,

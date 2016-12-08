@@ -221,14 +221,14 @@ int main(int argc, char *argv[])
   // outPtr = (FILE *)writeFile(lower_freq, freqPref, freqSuff);
   initLatArr(lat_arr);
 
-  // Open logfile:
-  logfile = fopen("/shared/users/asousa/WIPP/WIPPv4/crossing_log.txt","w");
+  // // Open logfile:
+  // logfile = fopen("/shared/users/asousa/WIPP/WIPPv4/crossing_log.txt","w");
 
-  if (logfile != NULL) {
-    printf("opened logfile\n");
-  } else {
-    printf("logfile failed\n");
-  }
+  // if (logfile != NULL) {
+  //   printf("opened logfile\n");
+  // } else {
+  //   printf("logfile failed\n");
+  // }
   // ----------------------------------------------------------------
 
   // // ----------------------------------------------------------------
@@ -308,7 +308,7 @@ int main(int argc, char *argv[])
   // ------------------------------------------------------------------
 
 
-  dispLatArr(lat_arr,  logfile);
+  // dispLatArr(lat_arr,  logfile);
 
 
   // ---------------- Do the resonance calculation --------------------
@@ -619,7 +619,7 @@ void checkCross(double BL_fact, double TL_fact, double BR_fact,
          (Xa <= min(max(x2ray, x1ray),max(x2EA,x1EA))) ) {
 
       // OKAY! This is a genuine crossing - figure out what to do next!
-
+      
       // ray frequency
       f = TL->f + div_freq*( TR->f - TL->f );
 
@@ -665,6 +665,7 @@ void checkCross(double BL_fact, double TL_fact, double BR_fact,
       // print information to file if greater than 1e-6 of initial pwr
       avePwr = ( TL->pwr[0] + BL->pwr[0] + TR->pwr[0] + BR->pwr[0] )/4.0;
       // fprintf(logfile,"CROSSING: %2.8f %2.8f %2.8f %2.8f %2.8f\n",t,r1ray,r2ray,lat_int_prev,lat_int);
+      printf("t: %g f: %g cell_pwr: %g\n",t, f, pwr);
       if (avePwr > WAVE_PWR_THRESH) {
         addToArr(lat_arr, t, f, pwr, psi, mu, EA_i, iTarg, stixP, stixR, stixL);
       }
@@ -845,8 +846,8 @@ void calcRes(cellT *lat_arr[][NUM_TARGS], long lower_freq)
       Bxw = fabs(Exw *stixD*n_z /C/ (stixS - mu_sq));
       Bzw = fabs((Exw *stixD *n_x) /(C*(stixX - mu_sq)));
       // printf("\nn_x: %g, n_z: %g, stixX: %g, stixD: %g, stixA: %g, stixB: %g, mu_sq: %g\n", n_x, n_z, stixX, stixD, stixA, stixB, mu_sq);
-    printf("Byw: %g Exw: %g Eyw: %g Ezw: %g Bxw: %g Bzw: %g\n",
-              Byw,    Exw,    Eyw,    Ezw,    Bxw,    Bzw);
+    // printf("Byw: %g Exw: %g Eyw: %g Ezw: %g Bxw: %g Bzw: %g\n",
+    //           Byw,    Exw,    Eyw,    Ezw,    Bxw,    Bzw);
 
       // Oblique integration quantities
       R1 = (Exw + Eyw)/(Bxw+Byw);
@@ -944,7 +945,7 @@ void calcRes(cellT *lat_arr[][NUM_TARGS], long lower_freq)
             //   mres/(gamma*v_para_star)*dwh_ds*(ds/2.0) -
             //   w/v_para_star - kz;
 
-            // THIS ONE MATCHES THE THESIS -- aps 11.2016
+            // // THIS ONE MATCHES THE THESIS -- aps 11.2016
             BB =   mres*wh/(gamma*v_para_star)
                  - mres/(gamma*v_para_star)*dwh_ds*(ds/2.0) * (w/v_para_star)*kz;
             
@@ -1023,8 +1024,8 @@ void calcRes(cellT *lat_arr[][NUM_TARGS], long lower_freq)
   printf("\nL= %g precipitation took: %2.6f sec\n",L,difftime(end,start));  
 
   // Make fwrite work in completely unbuffered mode to avoid errors
-  //setbuf(resPtrN, NULL);
-  //setbuf(resPtrS, NULL);
+  setbuf(resPtrN, NULL);
+  setbuf(resPtrS, NULL);
 
   // Write out the alpha arrays (pN, pS files)
   for(ei=0; ei<NUM_E; ei++) {

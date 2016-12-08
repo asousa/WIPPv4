@@ -24,15 +24,15 @@
 #define		H_E		5000.0
 
 // Time axis for simulation (axis to be interpolated onto -- not raytracer!)
-#define     T_MAX        10   // T_MAX
-#define     NUM_STEPS    1000
+#define     T_MAX        20   // T_MAX
+#define     NUM_STEPS    2000
 #define     T_STEP       (1.0*((1.0*T_MAX)/NUM_STEPS))
 
 // Width in degrees around center latitude for which we'll load rays
 #define     LAT_SPREAD 10 
 
 #define     RAYTRACER_STEPS 65535 // Maximum number of steps to read from the rayfiles
-                                  // (i.e., length to allocate; real vector may be less)
+                                  // (i.e., length to allocate; real vector may (should) be less)
 
 #define     F_STEP   10   // Hz. Separation in frequency (i.e., do 1-hz interpolation)
 #define     LAT_STEP 0.1  // Degrees interpolation between launch rays 
@@ -50,8 +50,8 @@
 #define 	DE_EXP	    ((E_EXP_TOP - E_EXP_BOT)/(NUM_E))
 
 // EA array grid settings:
-#define		EALimS		-40
-#define		EALimN		40
+#define		EALimS		-45
+#define		EALimN		45
 #define		EAIncr		1 //0.1
 #define     NUMLATS     ((EALimN - EALimS)/EAIncr + 1)
 

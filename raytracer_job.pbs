@@ -3,9 +3,9 @@
 #!/bin/bash
 #PBS -l walltime=72:00:00
 #PBS -j oe
-#PBS -l nodes=32:ppn=1
+#PBS -l nodes=33:ppn=1
 #PBS -o ray_job.txt
-#PBS -N legacy_raytracer
+#PBS -N legacy_raytracer_kp4
 #PBS -q batchnew
 
 #  --mca btl_tcp_if_include p3p2 tells batchnew nodes which network interface to use
