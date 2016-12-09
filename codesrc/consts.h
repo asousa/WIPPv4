@@ -19,8 +19,8 @@
 
 // For input power scaling:
 #define     Z0      377.0
-#define		A		5E3	
-#define		B		1E5
+#define		P_A		5E3	
+#define		P_B		1E5
 #define		H_E		5000.0
 
 // Time axis for simulation (axis to be interpolated onto -- not raytracer!)
@@ -68,5 +68,6 @@
 
 
 // For flux calculation:
-#define     ALPHA_DISTRIBUTION 0    // "SQUARE" in previous versions
+#define     ALPHA_DISTRIBUTION 0    // 1 for 'square' dist, 0 for 'ramp' dist.
+                                    // (See Bortnik, figure 5.8 (c) and (d))
 

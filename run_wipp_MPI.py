@@ -47,10 +47,10 @@ freq_pairs = zip(freqs[0:], freqs[1:])
 
 # L-shells to calculate at:
 # out_lats = np.linspace(30,70,32)
-out_lats = np.arange(20, 60)
-cs = coordinate_structure(out_lats, [0], [100],'geomagnetic')
-cs.transform_to('L_dipole')
-L_targ_list = np.round(100.*cs.L())/100.
+# out_lats = np.arange(20, 60)
+# cs = coordinate_structure(out_lats, [0], [100],'geomagnetic')
+# cs.transform_to('L_dipole')
+# L_targ_list = np.round(100.*cs.L())/100.
 
 
 # L_targ_list = [2.422]
@@ -64,7 +64,11 @@ L_targ_list = np.round(100.*cs.L())/100.
 # in_lat = 35.0
 # center_lats = np.arange(5,65,step=5)
 #center_lats = [5, 10, 15, 20, 30]
-center_lats = [15, 20, 25,      35, 40, 45, 50, 55]
+center_lats = [15, 20, 25, 30, 35, 40, 45, 50]
+center_lon  = [0, 2, 5]
+
+out_lats = np.arange(20, 60)
+out_lons = [0] #np.arange(0,10, step=2)
 #center_lats = [20, 30, 40, 50]
 # Input power to do:
 I0_list    = [-10e3]
@@ -73,8 +77,9 @@ I0_list    = [-10e3]
 root_dir = '/shared/users/asousa/WIPP/WIPPv4/'
 code_dir = os.path.join(root_dir,'codesrc')
 ray_dir  = '/shared/users/asousa/WIPP/WIPPv4/rays/33f_kp0' # Location of ray files
-out_dir  = os.path.join(root_dir,'outputs','agu2016_kp0_v2')                 # Where to assemble final results
-log_dir  = os.path.join(out_dir, 'logs')                    # Where to write log files
+out_dir  = os.path.join(root_dir,'outputs','agu2016_kp0_v3')         # Where to assemble final results
+log_dir  = os.path.join(out_dir, 'logs')                      # Where to write log files
+flux_dir = os.path.join(out_dir, 'phi')                       # Where to write final flux files
 local_dir= os.path.join(os.path.expanduser("~"),'scatter_tmp') # Local directory on each node
 # local_dir = '/tmp/scatter_tmp';
 
@@ -91,9 +96,10 @@ comm.Barrier()
 if do_scattering:
   # Generate task list:
   if rank == 0:
-    tasklist = [(w,x,y,z) for w,x,y,z in itertools.product(I0_list, center_lats, L_targ_list, freq_pairs)]
+    tasklist = [(w,x,y,z,a) for w,x,y,z,a in itertools.product(I0_list, center_lats, out_lats, out_lons, freq_pairs)]
     # Adjacent frequencies take similar time to complete... shuffle to distribute nicely
     np.random.shuffle(tasklist)
+    print "total tasks to do: ", len(tasklist)
   else:
     tasklist = None
 
@@ -122,7 +128,7 @@ if do_scattering:
     if not os.path.exists(log_dir):
       os.mkdir(log_dir)
 
-    for in_pwr, in_lat, out_L in itertools.product(I0_list, center_lats, L_targ_list):
+    for in_pwr, in_lat, out_lat in itertools.product(I0_list, center_lats, out_lats):
       pwr_path = os.path.join(out_dir,'pwr_%g'%(in_pwr))
       if not os.path.exists(pwr_path):
         os.mkdir(pwr_path) 
@@ -131,9 +137,9 @@ if do_scattering:
       if not os.path.exists(lat_path):
         os.mkdir(lat_path)
 
-      out_L_path = os.path.join(lat_path,'out_%g'%(out_L))
-      if not os.path.exists(out_L_path):
-        os.mkdir(out_L_path)
+      out_lat_path = os.path.join(lat_path,'lat_%g'%(out_lat))
+      if not os.path.exists(out_lat_path):
+        os.mkdir(out_lat_path)
 
       # Copy the constants file into the first directory, for reference
       os.system("cp %s/consts.h %s"%(code_dir, pwr_path))
@@ -160,11 +166,12 @@ if do_scattering:
     for job in chunks[rank]:
       I0 = job[0]
       center_lat = job[1]
-      L_targ = job[2]
-      f_low  = job[3][0]
-      f_high = job[3][1]
+      out_lat = job[2]
+      out_lon = job[3]
+      f_low  = job[4][0]
+      f_high = job[4][1]
 
-      working_dir = os.path.join(local_dir,'%s_%d_%g_%g_%g'%(host, rank, L_targ, center_lat, f_low))
+      working_dir = os.path.join(local_dir,'%s_%d_%g_%g_%g_%g'%(host, rank, out_lat, out_lon, center_lat, f_low))
 
       # if os.path.exists(working_dir):
       #   os.system("rm %s/*"%(working_dir))
@@ -180,14 +187,23 @@ if do_scattering:
       os.system("gcc -o calc_scattering %s/calc_scattering.c -lm"%(code_dir))
 
       # Run it:
-      job_cmd = "./calc_scattering %s %s %s %s %s %g" %(ray_dir, I0, center_lat, f_low, f_high, L_targ)
+      # job_cmd = "./calc_scattering %s %s %s %s %s %g" %(ray_dir, I0, center_lat, f_low, f_high, L_targ)
+      # print "%s/%d: Job command: %s"%(host, rank, job_cmd)
+
+      job_cmd = "./calc_scattering --ray_dir %s --I0 %s "%(ray_dir, I0) + \
+                "--f_lat %s --f_lon %s "%(center_lat, center_lon) + \
+                "--out_lat %s --out_lon %s "%(out_lat, out_lon) + \
+                "--f1 %s --f2 %s"%(f_low, f_high)
       print "%s/%d: Job command: %s"%(host, rank, job_cmd)
+
+#############
 
       runlog = subprocess.check_output(job_cmd,shell=True)
       # print runlog
       # os.system(job_cmd)
       # write output log:
-      file = open(os.path.join(working_dir,'scatter_%g_%g_%g_%g.log'%(I0, center_lat, L_targ, f_low)),'w')
+      log_filename ="scatter_%g_%g_%g_%g_%g.log"%(I0, center_lat, out_lat, out_lon, f_low)
+      file = open(os.path.join(working_dir, log_filename),'w')
       file.write(runlog)
       file.close()
 
@@ -197,33 +213,34 @@ if do_scattering:
 
       # Move compiled files to out dir
 
-      job_out_path = os.path.join(out_dir,"pwr_%g/in_%g/out_%g"%(I0, center_lat, L_targ))
+      job_out_path = os.path.join(out_dir,"pwr_%g/in_%g/lat_%g"%(I0, center_lat, out_lat))
 
       for attempt in range(3):
         try:
-          n_filename = "pN%d_%g.dat"%(f_low, L_targ)
-          shutil.copy(n_filename, "%s/%s"%(job_out_path, n_filename))
-          # os.system("cp pN%d_%g.dat %s"%(f_low, L_targ, job_out_path))
-          s_filename = "pS%d_%g.dat"%(f_low, L_targ)
+          n_filename = 'pN_%g_%g_%d.dat'%(out_lat, out_lon, f_low)
+          shutil.copy(n_filename, "%s/%s"%(job_out_path, n_filename))          
+
+          s_filename = 'pS_%g_%g_%d.dat'%(out_lat, out_lon, f_low)
           shutil.copy(s_filename, "%s/%s"%(job_out_path, s_filename))
-          # shutil.copy("pS%d_%g.dat %s"%(f_low, L_targ), job_out_path)
-          # os.system("cp pS%d_%g.dat %s"%(f_low, L_targ, job_out_path))
-          log_filename ="scatter_%g_%g_%g_%g.log"%(I0, center_lat, L_targ, f_low)
+
+          log_filename ="scatter_%g_%g_%g_%g_%g.log"%(I0, center_lat, out_lat, out_lon, f_low)
           shutil.copy(log_filename, "%s/%s"%(log_dir, log_filename))
-          # os.system("cp scatter_%g_%g_%g_%g.log %s"%(I0, center_lat, L_targ, f_low, log_dir))
+
         except:
-          print "[%s/%d:Failed to copy files for (%d, %g) (attempt %d of 3)"%(host, rank, f_low, L_targ, attempt)
+          print "[%s/%d:Failed to copy files for (%d, %g, %g) (attempt %d of 3)"%(host, rank, f_low, out_lat, out_lon, attempt)
           time.sleep(5)
           continue
         else:
-          print "[%s/%d:Successfully copied files for (%d, %g)"%(host, rank, f_low, L_targ)
+          print "[%s/%d:Successfully copied files for (%d, %g, %g)"%(host, rank, f_low, out_lat, out_lon)
           break
       
       # os.chdir(root_dir)
 
-      time.sleep(5)
-
+#       time.sleep(5)
+# #############
       # Keep it neat, yo
+      # if os.path.exists(working_dir):
+      #   shutil.rmtree(working_dir)
       # os.system("rm -r %s"%(working_dir))
 
       # # pause for a smidge
@@ -239,81 +256,133 @@ if do_scattering:
   # Wait until all scatter jobs are complete
   comm.Barrier()
 
-  os.system("rm -r %s/*"%local_dir)
-
   if rank==0:
     print "------------Finished with scattering-------------"
 
 
 
-# ----------------------------- calc_flux.c ---------------------------------------
-# if do_flux:
-#   print "----------- CALCULATING FLUX ------------"
-#   # Generate task list:
+## ----------------------------- calc_flux.c ---------------------------------------
+if do_flux:
+  print "----------- CALCULATING FLUX ------------"
+  # Generate task list:
 
-#   tasklist = [(w,x,y) for w,x,y in itertools.product(I0_list, center_lats, L_targ_list)]
-
-#   # Segment task list for each node:
-#   nTasks = 1.0*len(tasklist)
-#   nProcs = 1.0*comm.Get_size()
-#   nSteps = np.ceil(nTasks/nProcs).astype(int)
-
-#   chunks =  comm.bcast([tasklist[i:i+nSteps] for i in range(0, len(tasklist), nSteps)])
-
-#   if (rank < len(chunks)):
-
-#     print "Process %d on host %s, doing %g jobs"%(rank, host, len(chunks[rank]))
+  if rank == 0:
+    if not os.path.exists(out_dir):
+      os.mkdir(out_dir)
+    if not os.path.exists(log_dir):
+      os.mkdir(log_dir)
+    if not os.path.exists(flux_dir):
+      os.mkdir(flux_dir)
 
 
-#     if not os.path.exists(local_dir):
-#       print "making local dir on %s"%(host)
-#       os.mkdir(local_dir)
+    tasklist = [(w,x,y,z) for w,x,y,z in itertools.product(I0_list, center_lats, out_lats, out_lons)]
+  # tasklist = [(w,x,y) for w,x,y in itertools.product(I0_list, center_lats, L_targ_list)]
+    # Adjacent frequencies take similar time to complete... shuffle to distribute nicely
+    np.random.shuffle(tasklist)
+    print "total tasks to do: ", len(tasklist)
+  else:
+    tasklist = None
+  tasklist = comm.bcast(tasklist, root=0)
 
-#     for job in chunks[rank]:
-#       I0 = job[0]
-#       center_lat = job[1]
-#       L_targ = job[2]
+  # Segment task list for each node:
+  nTasks = 1.0*len(tasklist)
+  nProcs = 1.0*comm.Get_size()
+  nSteps = np.ceil(nTasks/nProcs).astype(int)
+
+  # chunks = [tasklist[i:i+nSteps] for i in range(0, len(tasklist), nSteps)]
+  chunks = partition(tasklist, nProcs)
+  if (rank < len(chunks)):
+
+    print "Process %d on host %s, doing %g jobs"%(rank, host, len(chunks[rank]))
 
 
-#       working_dir = os.path.join(local_dir,'flux_%g_%g_%g/'%(np.abs(I0),center_lat,L_targ))
-#       if os.path.exists(working_dir):
-#         print "clearing old working directory"
-#         os.system("rm -r %s"%(working_dir))
+    if not os.path.exists(local_dir):
+      print "making local dir on %s"%(host)
+      os.mkdir(local_dir)
 
-#       os.mkdir(working_dir)
-#       os.chdir(working_dir)
+    for job in chunks[rank]:
+      I0 = job[0]
+      center_lat = job[1]
+      out_lat = job[2]
+      out_lon = job[3]
 
-#       os.system("gcc -o calc_flux %s/calc_flux.c -lm"%(code_dir))
 
-#       scatter_dir = os.path.join(out_dir,'pwr_%g/in_%g/out_%g'%(I0, center_lat, L_targ))
-#       flux_file   = os.path.join(code_dir,'EQFLUXMA.dat')
+      working_dir = os.path.join(local_dir,'flux_%g_%g_%g_%g/'%(np.abs(I0),center_lat, out_lat, out_lon))
+      if os.path.exists(working_dir):
+        print "clearing old working directory"
+        os.system("rm -r %s/*"%(working_dir))
+      else:
+        os.mkdir(working_dir)
 
-#       job_cmd = "./calc_flux %s %g %s" %(scatter_dir, job[2], flux_file)
-#       print "Job command: ", job_cmd
+      os.chdir(working_dir)
+      print working_dir
+      os.system("gcc -o calc_flux %s/calc_flux.c -lm"%(code_dir))
 
-#       # os.system(job_cmd)
-#       # runlog = subprocess.check_output(job_cmd, shell=True)
+      # scatter_dir = os.path.join(out_dir,'pwr_%g/in_%g/out_%g'%(I0, center_lat, L_targ))
+      scatter_dir = os.path.join(out_dir,"pwr_%g/in_%g/lat_%g"%(I0, center_lat, out_lat))
 
-#       # file = open(os.path.join(log_dir,'flux_%g_%g_%g.log'%(I0, center_lat, L_targ)),'w+')
-#       # file.write(runlog)
-#       # file.close()
+      flux_file   = os.path.join(code_dir,'EQFLUXMA.dat')
 
-#       file = open(os.path.join(log_dir,'flux_%g_%g_%g.log'%(I0, center_lat, L_targ)),'w+')
-#       subprocess.call(job_cmd, shell=True, stdout=file)
-#       file.close()
+      job_cmd = "./calc_flux --p_dir %s --out_dir %s "%(scatter_dir, working_dir) + \
+                "--out_lat %s --out_lon %s "%(out_lat, out_lon) + \
+                "--flux_file %s"%flux_file
 
-#       print "Completed: %s, %s"%(center_lat, L_targ)
+      # job_cmd = "./calc_flux %s %g %s" %(scatter_dir, job[2], flux_file)
+      print "Job command: ", job_cmd
 
-#       # Move completed files over to shared directory:
-#       # os.system("mv phi* %s"%(scatter_dir))
+      # os.system(job_cmd)
+      runlog = subprocess.check_output(job_cmd, shell=True)
 
-#       os.chdir(root_dir)
 
-#       # Keep it neat, yo
-#       os.system("rm -r %s"%(working_dir)) 
+      log_filename ="flux_%g_%g_%g_%g.log"%(I0, center_lat, out_lat, out_lon)
+      file = open(os.path.join(working_dir,'flux_%g_%g_%g_%g.log'%(I0, center_lat, out_lat, out_lon)),'w+')
+      file.write(runlog)
+      file.close()
 
-#   else:
-#     print "Process %d on host %s has nothing to do..."%(rank, host)
 
+      print "[%s/%d]:Completed: %s, %s, %s"%(host, rank, center_lat, out_lat, out_lon)
+
+      # Move completed files over to shared directory:
+      # os.system("mv phi* %s"%(scatter_dir))
+      for attempt in range(3):
+        try:
+          n_filename = 'phi_%d_%d_N.dat'%(out_lat, out_lon)
+          shutil.copy(n_filename, "%s/%s"%(flux_dir, n_filename))          
+
+          s_filename = 'phi_%d_%d_S.dat'%(out_lat, out_lon)
+          shutil.copy(s_filename, "%s/%s"%(flux_dir, s_filename))
+
+          shutil.copy(log_filename, "%s/%s"%(log_dir, log_filename))
+
+        except:
+          print "[%s/%d:Failed to copy files for (%g, %g) (attempt %d of 3)"%(host, rank, out_lat, out_lon, attempt)
+          time.sleep(5)
+          continue
+        else:
+          print "[%s/%d:Successfully copied files for (%g, %g)"%(host, rank, out_lat, out_lon)
+          break
+
+
+
+
+      # os.chdir(root_dir)
+
+      # # Keep it neat, yo
+      # os.system("rm -r %s"%(working_dir)) 
+
+  else:
+    print "Process %d on host %s has nothing to do..."%(rank, host)
+
+  comm.Barrier()
+
+  if rank==0:
+    print "------------Finished with flux calculations -------------"
+
+
+
+
+  # if os.path.exists(local_dir):
+  #   # shutil.rmtree(local_dir)
+  #   os.system("rm -r %s/*"%local_dir)
 
 

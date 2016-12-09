@@ -5,6 +5,7 @@
 # include <stdlib.h>
 # include "consts.h"
 #include <stdbool.h>
+#include <getopt.h>
 
 /* A cleaned-up version of readOneFileInC_102903.c.
  * Started 5/17/2016, Austin Sousa -- asousa@stanford.edu
@@ -15,8 +16,8 @@
 // Global variables:
 //------------------
 
-float       LAM_S;
-double      MAX_POWER; 
+// float       LAM_S;
+// double      MAX_POWER; 
 double      DIV_LAT_NUM;
 double      DIV_FREQ_NUM;
 int     NUM_TIMES;
@@ -112,7 +113,9 @@ void checkCross(double BL_fact, double TL_fact, double BR_fact,
 double ltgPwr(float i0, float center_lat, float dlat, float dfreq, long f, 
           float lat, float dlong );
 double ionoAbsorp(float lat, long f);
-void initPwr(float i0, rayT *BL, rayT *TL, rayT *BR, rayT *TR);
+// void initPwr(float i0, rayT *BL, rayT *TL, rayT *BR, rayT *TR);
+void initPwr(float i0, rayT *BL, rayT *TL, rayT *BR, rayT *TR,
+  float flash_lat, float flash_lon, float out_lon);
 int outsideL(double BL_l, double TL_l, double BR_l, double TR_l, int *iTarg);
 int outsideLat(double BL_lat, double TL_lat, double BR_lat, 
            double TR_lat, int *iTarg);
@@ -126,12 +129,16 @@ void addToArr(cellT *lat_arr[][NUM_TARGS],double t, double f,
 int compare(double t_try, double f_try, double t_next, double f_next);
 void dispLatArr(cellT *lat_arr[][NUM_TARGS], FILE *outPtr);
 void freeArr(cellT *lat_arr[][NUM_TARGS]);
-void calcRes(cellT *lat_arr[][NUM_TARGS], long lower_freq);
+void calcRes(cellT *lat_arr[][NUM_TARGS], long lower_freq, char* suff);
 void getFltConst(double L, double lat, double alpha_eq, 
          double *flt_const_N, double *flt_const_S);
 void Fresnel(double x0, double *FS, double *FC);
 void addToAlphaArr(float **arr_N, float **arr_S, 
            double iono_time, int e_toti, double dalpha);
+double haversine_distance(double latitude1, double longitude1,
+           double latitude2, double longitude2);
+double ltgPwr_2d(float i0, float flash_lat, float flash_lon, float ray_lat, float ray_lon,
+              float dlat, long f, float dfreq);
 
 /*
  * FUNCTION: main
@@ -158,15 +165,16 @@ int main(int argc, char *argv[])
   FILE *dampL=NULL, *dampR=NULL;
   char sysCmd[128];
   char fileL[128], fileR[128], dampFileL[128], dampFileR[128];
-  char directory[128];
-  char *freqPref="f", freqSuff[32];
+  // char directory[128];
+  char *freqPref="f";
+  char suff[32];
   float yO, step; 
   double AN=0.0, v0_sq, freq_step, *EA_Arr;
   rayT BL, TL, BR, TR, *tmp;
   int i, j;
-  long lower_freq, upper_freq;
+  // long lower_freq, upper_freq;
   cellT *lat_arr[ (int)NUMLATS ][ NUM_TARGS ];
-  float i0, center_lat;
+  // float i0, center_lat;
   float dlat, dfreq;
 
   rayT L_list[256], R_list[256];
@@ -174,25 +182,78 @@ int main(int argc, char *argv[])
   int raylist_length = 0;
   int r;
 
+  // Input parameters + default settings:
+  int opt = 0;
+  int opt_index = 0;
+  float center_lat = 30;
+  float center_lon = 0;
+  float out_lat = 0;
+  float out_lon = 0;
+  float i0 = -10000;
+  long  lower_freq = 200;
+  long  upper_freq = 1000;
+  char directory[128] ="./";
+
+  // Parse input arguments:
+  static struct option long_options[] =
+  {
+      {"ray_dir",     required_argument,    0, 'd'},
+      {"f_lat",       required_argument,    0, 'f'},
+      {"f_lon",       required_argument,    0, 'g'},
+      {"out_lat",     required_argument,    0, 'h'},
+      {"out_lon",     required_argument,    0, 'i'},
+      {"I0",          required_argument,    0, 'j'},
+      {"f1",          required_argument,    0, 'k'},
+      {"f2" ,         required_argument,    0, 'l'},
+      {0, 0, 0, 0}
+  };
+
+  while (opt != -1) {
+      opt = getopt_long (argc, argv, "d:f:g:h:i:j:k:l:", long_options, &opt_index);
+      // cout << "opt is " << opt << "\n";
+      switch(opt) {
+          case 0:
+          if (long_options[opt_index].flag != 0)      break;
+          case 'd':   // ray_dir
+            sprintf(directory,"%s",optarg);           break;
+          case 'f':
+            center_lat = atof(optarg);                break;
+          case 'g':
+            center_lon = atof(optarg);                break;
+          case 'h':
+            out_lat    = atof(optarg);                break;
+          case 'i':
+            out_lon    = atof(optarg);                break;
+          case 'j':
+            i0         = atof(optarg);                break;
+          case 'k':
+            lower_freq = atol(optarg);                break;
+          case 'l':
+            upper_freq = atol(optarg);                break;
+          case '?':
+               printf("\nUnknown option: %s\n",opt);  break;
+      }
+  }
 
 
 
 
 
 
-  // --------------  get arguments from command line ---------------
-  if(argc != 7) 
-    { printf("Wrong number of input arguments (calc_scattering)\n");  exit(0); }
+
+  // // --------------  get arguments from command line ---------------
+  // if(argc != 7) 
+  //   { printf("Wrong number of input arguments (calc_scattering)\n");  exit(0); }
 
   
 
-  sprintf(directory,"%s",argv[1]);
-  i0 = atof(argv[2]);
-  center_lat = atof(argv[3]);
-  lower_freq = atol(argv[4]);
-  upper_freq = atol(argv[5]);
-  L_TARG =atof(argv[6]);
-  printf("directory: %s\n",directory);
+  // sprintf(directory,"%s",argv[1]);
+  // i0 = atof(argv[2]);
+  // center_lat = atof(argv[3]);
+  // lower_freq = atol(argv[4]);
+  // upper_freq = atol(argv[5]);
+  // L_TARG =atof(argv[6]);
+  // printf("directory: %s\n",directory);
 
 
   // lower_freq = atol(argv[1]);
@@ -201,23 +262,47 @@ int main(int argc, char *argv[])
   // DIV_LAT_NUM = atof(argv[4]);
   // freq_step = atof(argv[5]);
   // L_TARG = atof(argv[6]);
-  // DIV_FREQ_NUM = (upper_freq - lower_freq) / freq_step ;
+  DIV_FREQ_NUM = (upper_freq - lower_freq) / freq_step ;
 
   sprintf(fileL, "%s/newray%d.dat",directory,lower_freq);
   sprintf(fileR, "%s/newray%d.dat",directory,upper_freq);
   sprintf(dampFileL, "%s/d%d.dat",directory,lower_freq);
   sprintf(dampFileR, "%s/d%d.dat",directory,upper_freq);
-  printf("\nlower_freq: %d\nupper_freq: %d\n",lower_freq,upper_freq);
-  printf("center_lat: %g,\ndiv_lat_num: %g \n\n",center_lat, DIV_LAT_NUM);
-  printf("fileL: %s\n",fileL);
-  printf("fileR: %s\n",fileR);
-  printf("T_STEP: %f\n",T_STEP);
+  // printf("\nlower_freq: %d\nupper_freq: %d\n",lower_freq,upper_freq);
+
+  // printf("center_lat: %g,\ndiv_lat_num: %g \n\n",center_lat, DIV_LAT_NUM);
+  // printf("fileL: %s\n",fileL);
+  // printf("fileR: %s\n",fileR);
+
+// Convert out_lat to L-shell:
+L_TARG = round(100.*((R_E + H_IONO)/(R_E*pow(cos(D2R*out_lat),2))))/100.;
+
+
+  
+
+// ----------------- Introductions --------------------
+  printf(" ------ 2D WIPP Code ------ \n");
+  printf("     calc_scattering\n");
+  printf(" -------------------------- \n\n");
+
+  printf("flash lat:\t%g\tlon:\t%g\n",center_lat, center_lon);
+  printf("out lat:\t%g\tlon:\t%g\n",out_lat, out_lon);
+  printf("ray path:\t%s\n",directory);
+  printf("frequencies:\t%d to %d hz\n",lower_freq, upper_freq);
+  printf("flash current:\t %gkA\n",i0/1000.);
+  printf("T_STEP:\t%g\n",T_STEP);
+  printf("L-shell:\t%f\n",L_TARG);
+  printf(" -------------------------- \n\n");
+
+
   // ----------------------------------------------------------------
 
 
   // ----------------  Run initialization scripts -------------------
   EA_Arr = (double *)initEA_Arr();
-  sprintf(freqSuff, "_%g", L_TARG);
+  // // sprintf(freqSuff, "_%g", L_TARG);  // L-shell file name
+  sprintf(suff, "%g_%g",out_lat, out_lon);     // Latitude file name
+
   // outPtr = (FILE *)writeFile(lower_freq, freqPref, freqSuff);
   initLatArr(lat_arr);
 
@@ -290,7 +375,7 @@ int main(int argc, char *argv[])
          (fabs(TL.lat[0] - center_lat) <= LAT_SPREAD/2.0) ) {
 
       // Scale the raytracing results by incident power
-      initPwr(i0, &BL, &TL, &BR, &TR);
+      initPwr(i0, &BL, &TL, &BR, &TR, center_lat, center_lon, out_lon);
 
       // Interpolate onto fine-scale grid, find crossings with EA segments
       doInterp( &BL, &TL, &BR, &TR, lat_arr, EA_Arr );
@@ -312,7 +397,7 @@ int main(int argc, char *argv[])
 
 
   // ---------------- Do the resonance calculation --------------------
-  calcRes(lat_arr, lower_freq);
+  calcRes(lat_arr, lower_freq, suff);
   // ------------------------------------------------------------------
 
 
@@ -681,12 +766,13 @@ void checkCross(double BL_fact, double TL_fact, double BR_fact,
  * particle using the lat_arr data  
  *
  */
-void calcRes(cellT *lat_arr[][NUM_TARGS], long lower_freq)
+void calcRes(cellT *lat_arr[][NUM_TARGS], long lower_freq, char* suff)
 {
   FILE *resPtrN, *resPtrS;
   int i, j=0, kk, mres, noutN, noutS, ei, ti, e_toti;
   cellT *next;
-  char *prefN="pN", *prefS="pS", suff[64];
+  char *prefN="pN", *prefS="pS";
+
   double lat, L, t, f, pwr, psi, mu, stixP, stixR, stixL, latk;
   double Bxw, Byw, Bzw, Exw, Eyw, Ezw, stixD, stixS, stixA;
   double stixB, stixX, n_x, n_z, k, kx, kz, rho1, rho2, Byw_sq;
@@ -714,7 +800,7 @@ void calcRes(cellT *lat_arr[][NUM_TARGS], long lower_freq)
   L = L_TARG;
   epsm = (1/L)*(R_E+H_IONO)/R_E;
   alpha_eq = asin(sqrt( pow(epsm,3)/sqrt(1+3*(1-epsm)) ));
-  sprintf(suff, "_%g", L);
+  // sprintf(suff, "_%g", L);
   resPtrN = writeFile(lower_freq, prefN, suff);
   resPtrS = writeFile(lower_freq, prefS, suff);
   printf("\nNow doing L: %g\n", L);
@@ -1024,23 +1110,25 @@ void calcRes(cellT *lat_arr[][NUM_TARGS], long lower_freq)
   printf("\nL= %g precipitation took: %2.6f sec\n",L,difftime(end,start));  
 
   // Make fwrite work in completely unbuffered mode to avoid errors
-  setbuf(resPtrN, NULL);
-  setbuf(resPtrS, NULL);
+  // setbuf(resPtrN, NULL);
+  // setbuf(resPtrS, NULL);
 
   // Write out the alpha arrays (pN, pS files)
-  for(ei=0; ei<NUM_E; ei++) {
-    for(ti=0; ti<NUM_TIMES; ti++) {
-      noutN=fwrite(&(arr_N[ei*NUM_TIMES+ti]), sizeof(float), 1, resPtrN);
-      noutS=fwrite(&(arr_S[ei*NUM_TIMES+ti]), sizeof(float), 1, resPtrS);
-      // noutN=fprintf(resPtrN, "%e\t", arr_N[ei*NUM_TIMES+ti]);
-      // noutS=fprintf(resPtrS, "%e\t", arr_S[ei*NUM_TIMES+ti]);
+  noutN=fwrite(arr_N, NUM_E*NUM_TIMES*sizeof(float),1, resPtrN);
+  noutS=fwrite(arr_S, NUM_E*NUM_TIMES*sizeof(float),1, resPtrS);
+  // for(ei=0; ei<NUM_E; ei++) {
+  //   for(ti=0; ti<NUM_TIMES; ti++) {
+  //     noutN=fwrite(&(arr_N[ei*NUM_TIMES+ti]), sizeof(float), 1, resPtrN);
+  //     noutS=fwrite(&(arr_S[ei*NUM_TIMES+ti]), sizeof(float), 1, resPtrS);
+  //     // noutN=fprintf(resPtrN, "%e\t", arr_N[ei*NUM_TIMES+ti]);
+  //     // noutS=fprintf(resPtrS, "%e\t", arr_S[ei*NUM_TIMES+ti]);
 
-      // arr_N[ei*NUM_TIMES+ti] = 0.0;
-      // arr_S[ei*NUM_TIMES+ti] = 0.0;    
-    }
-    // fprintf(resPtrN,"\n");
-    // fprintf(resPtrS,"\n");
-  }
+  //     // arr_N[ei*NUM_TIMES+ti] = 0.0;
+  //     // arr_S[ei*NUM_TIMES+ti] = 0.0;    
+  //   }
+  //   // fprintf(resPtrN,"\n");
+  //   // fprintf(resPtrS,"\n");
+  // }
   
   printf("Successfully wrote elements for L=%g\n", L);
   //noutN=fwrite(arr_N, sizeof(float), (NUM_E*NUM_TIMES), resPtrN);
@@ -1198,8 +1286,8 @@ double ltgPwr(float i0, float center_lat, float dlat, float dfreq, long f,
   // Pwr at sub-iono point
   w = 2*PI*f;
   w_sq =  pow( w , 2 );
-  S = ( (1/Z0) * pow( (H_E*i0*2E-7*(sin(xi)/dist_tot)*w*(A-B)) , 2 ) 
-  /  (  (w_sq+pow(A,2))*(w_sq+pow(B,2))  )      ) ;
+  S = ( (1/Z0) * pow( (H_E*i0*2E-7*(sin(xi)/dist_tot)*w*(P_A-P_B)) , 2 ) 
+  /  (  (w_sq+pow(P_A,2))*(w_sq+pow(P_B,2))  )      ) ;
   S_vert = S * cos(xi) ;  // factor for vert prop.
   
   // now DO THE ATTENUATION
@@ -1223,6 +1311,48 @@ double ltgPwr(float i0, float center_lat, float dlat, float dfreq, long f,
 }
 
 
+double ltgPwr_2d(float i0, float flash_lat, float flash_lon, float ray_lat, float ray_lon,
+              float dlat, long f, float dfreq) 
+{ // Input power scaling -- this version includes separation in longitude
+  // as well as latitude.
+  // i0: Peak current (amps)
+  // flash lat, flash_lon: location of lightning stroke
+  // ray_lat, ray_lon: location of the ray we're scaling
+  // dlat: separation in degrees latitude between adjacent rays
+  // f: ray frequency (hz)
+  // dfreq: spacing between adjacent ray frequencies
+
+  double gc_distance, dist_tot, xi;
+  double S, S_vert;
+  double attn_factor;
+  double w, w_sq;
+  
+  gc_distance = haversine_distance(flash_lat, flash_lon, ray_lat, ray_lon);
+
+  dist_tot = hypot(gc_distance, H_IONO);
+  xi = atan2(gc_distance, H_IONO);  // Incident angle
+
+  w = 2*PI*f;
+  w_sq =  pow( w , 2 );
+  S = ( (1/Z0) * pow( (H_E*i0*2E-7*(sin(xi)/dist_tot)*w*(P_A-P_B)) , 2 ) 
+                 /  (  (w_sq+pow(P_A,2))*(w_sq+pow(P_B,2))  )      ) ;
+  S_vert = S * cos(xi) ;  // factor for vert prop.
+
+  // Ionosphere absorption model
+  attn_factor = pow(10,-(ionoAbsorp(ray_lat,f)/10)  );
+  S_vert = S_vert * attn_factor;
+  printf("\ni0: %2.3f,  f: %ld, dist_tot: %2.3f, xi: %2.3f, S_vert: %e\n",
+            i0,         f,      dist_tot,        xi,        S_vert);
+ 
+
+  // S is in units of w/m^2/hz; integrate across latitude separation,
+  // frequency separation, and implicitly over 1-meter slice in longitude
+  // to get the total input power, in Watts, at this ray.
+  return ( S_vert * dlat*D2R*(R_E+H_IONO) * dfreq * 0.87788331); 
+
+}
+
+
 
 
 
@@ -1238,44 +1368,39 @@ double ltgPwr(float i0, float center_lat, float dlat, float dfreq, long f,
  *
  */
 
-void initPwr(float i0, rayT *BL, rayT *TL, rayT *BR, rayT *TR)
+void initPwr(float i0, rayT *BL, rayT *TL, rayT *BR, rayT *TR,
+  float flash_lat, float flash_lon, float ray_lon)
 {
   double dlat, dfreq;
   int i, j;
 
-
+  double pwr_2d;
   // calculate ray power and interpolate
 
-  // dlat = (TL->lat[0] - BL->lat[0])/ DIV_LAT_NUM ;
-  // dfreq = (TR->f - TL->f) / DIV_FREQ_NUM ;
   dlat = (TL->lat[0] - BL->lat[0]);
   dfreq = (TR->f - TL->f);
 
-
-// double ltgPwr(float i0, float center_lat, float dlat, float dfreq, long f, 
-//         float lat, float dlong )
-
-  // determine maximum power in the simulation run (assume 4kHz)
-  MAX_POWER = ltgPwr(i0, BL->center_lat, dlat, dfreq, 4000, BL->center_lat, 0.7);
-  printf("\nMAX_POWER: %e\n",MAX_POWER);
-
   //if(BL->pwr[0]>=.9) {
-    BL->pwr[0]=ltgPwr(i0, BL->center_lat, dlat, dfreq,BL->f,BL->lat[0],0.7);
+    // BL->pwr[0]=ltgPwr(i0, BL->center_lat, dlat, dfreq,BL->f,BL->lat[0],0.7);
+    BL->pwr[0]=ltgPwr_2d(i0, flash_lat, flash_lon, BL->lat[0], ray_lon, dlat, BL->f, dfreq);
     for(j=1;j<BL->numSteps;j++) BL->pwr[j]=BL->pwr[j]*BL->pwr[0];
   //}
 
   //if(TL->pwr[0]>=.9) {
-    TL->pwr[0]=ltgPwr(i0, TL->center_lat,dlat, dfreq, TL->f,TL->lat[0],0.7);
+    // TL->pwr[0]=ltgPwr(i0, TL->center_lat,dlat, dfreq, TL->f,TL->lat[0],0.7);
+    TL->pwr[0]=ltgPwr_2d(i0, flash_lat, flash_lon, TL->lat[0], ray_lon, dlat, TL->f, dfreq);
     for(j=1;j<TL->numSteps;j++) TL->pwr[j]=TL->pwr[j]*TL->pwr[0];
   //}
 
   //if(BR->pwr[0]>=.9) {
-    BR->pwr[0]=ltgPwr(i0, BR->center_lat,dlat, dfreq, BR->f,BR->lat[0],0.7);
+    // BR->pwr[0]=ltgPwr(i0, BR->center_lat,dlat, dfreq, BR->f,BR->lat[0],0.7);
+    BR->pwr[0]=ltgPwr_2d(i0, flash_lat, flash_lon, BR->lat[0], ray_lon, dlat, BR->f, dfreq);
     for(j=1;j<BR->numSteps;j++) BR->pwr[j]=BR->pwr[j]*BR->pwr[0];
   //}
 
   //if(TR->pwr[0]>=.9) {
-    TR->pwr[0]=ltgPwr(i0, TR->center_lat,dlat, dfreq, TR->f,TR->lat[0],0.7);
+    // TR->pwr[0]=ltgPwr(i0, TR->center_lat,dlat, dfreq, TR->f,TR->lat[0],0.7);
+    TR->pwr[0]=ltgPwr_2d(i0, flash_lat, flash_lon, TR->lat[0], ray_lon, dlat, TR->f, dfreq);
     for(j=1;j<TR->numSteps;j++) TR->pwr[j]=TR->pwr[j]*TR->pwr[0];
   //}
 
@@ -1450,7 +1575,7 @@ double *initEA_Arr(void)
     EA_c = x1*y2 - y1*x2;
     
     EA_length = sqrt( (x1-x2)*(x1-x2)+(y1-y2)*(y1-y2) )*R_E;  
-    printf("lat: %g EA_length: %g\n",lam, EA_length);
+    // printf("lat: %g EA_length: %g\n",lam, EA_length);
 
     
     // printf("\nEA_lat: %2.3f, EA_length: %e\n",lam,EA_length);
@@ -1521,7 +1646,7 @@ FILE  *readFile( char *fileName, FILE *filePtr, rayT *ray, long f, float center_
   //  Open the file for reading  //
   if(filePtr == NULL) {
     if( (filePtr = fopen( fileName ,"r")) == NULL ) {
-      printf("Hey buddy, I can't open the file!\n");
+      printf("Could not open file at %s\n",fileName);
       exit(1);
     } else {
       printf("\nFile %s\nOpened successfully! \n\n", fileName);
@@ -2313,7 +2438,7 @@ FILE *writeFile(long lower_freq, char *pref, char *suff)
   FILE *outPtr;
 
   // make some kind of filename convention, return pointer
-  sprintf( outFileName, "%s%d%s.dat", pref, lower_freq, suff);  
+  sprintf( outFileName, "%s_%s_%d.dat", pref, suff, lower_freq);  
 
   if((outPtr=fopen(outFileName,"w"))== NULL) {
     printf("Problem opening output file!\n");
@@ -2374,5 +2499,31 @@ float interpPt(float *xI, float *yI, int n, float xO)
     *( xO-xI[iMid] ) + yI[iMid];
   
   return(yO);
+}
+
+
+double haversine_distance(double latitude1, double longitude1, double latitude2,
+                          double longitude2) {
+    // Great-circle distance between two pairs of (lat, lon), in degrees.
+    // Returned distance is in whatever units R_E is in.
+    double lat1, lat2, lon1, lon2;
+    double d_lat, d_lon;
+    double a;
+    double d_sigma;
+
+    lat1 = D2R*latitude1;
+    lon1 = D2R*longitude1;
+    lat2 = D2R*latitude2;
+    lon2 = D2R*longitude2;
+
+    d_lat = fabs(lat1 - lat2);
+    d_lon = fabs(lon1 - lon2);
+
+    a = pow(sin(d_lat / 2.0), 2) + cos(lat1) * cos(lat2) * pow(sin(d_lon / 2.0), 2);
+
+    //double d_sigma = 2 * atan2(sqrt(a), sqrt(1 - a));
+    d_sigma = 2 * asin(sqrt(a));
+
+    return R_E * d_sigma;
 }
 

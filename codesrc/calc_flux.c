@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include "consts.h"
 #include "get_freqs.c"
+#include <getopt.h>
 
 /* A cleaned-up version of calcFlux.c.
  * Started 5/25/2016, Austin Sousa -- asousa@stanford.edu
@@ -25,18 +26,20 @@ int nancounter;
 // -----------------------------------------------
 // Constants to perform Gauss quadrature integration
 // -----------------------------------------------
-double t5[] =   {   -0.9061798459, 
-            -0.5384693101, 
-            0, 
-            0.9061798459, 
-            0.5384693101    };
+// double t5[] =   {   -0.9061798459, 
+//             -0.5384693101, 
+//             0, 
+//             0.9061798459,  
+//             0.5384693101    };
 
-double beta5[] = {  0.2369268851,
-            0.4786286745, 
-            0.56888888889, 
-            0.2369268851,
-            0.4786286745    };
+// double beta5[] = {  0.2369268851,
+//             0.4786286745, 
+//             0.56888888889, 
+//             0.2369268851,
+//             0.4786286745    };
 
+double beta5[] ={0.56888889, 0.47862867,  0.47862867, 0.23692689,  0.23692689};
+double t5[] =   {0.,         0.53846931, -0.53846931, 0.90617985, -0.90617985};
 
 
 // -----------------------------------------------
@@ -45,7 +48,7 @@ double beta5[] = {  0.2369268851,
 
 float *getArr(void);
 void updateArr(float *arr1, float *arr2);
-void compFlux(float *arr, double L, int k, char *dir, char *flux_filename);
+void compFlux(float *arr, float out_lat, float out_lon, int k, char *dir, char *flux_filename);
 void readJ(float J[][100], char *filename);
 double getJdiff(float J[][100], double E, double alpha_lc);
 
@@ -67,8 +70,8 @@ int main(int argc, char *argv[])
 {
   FILE *inPtr, *alphaPtr;
   int numFreqs, i, k, m, nin, ei, ti;
-  char *dir, sysCmd[512], filename[64], *NS, alphaFile[128];
-  char *flux_filename;
+  char sysCmd[512], filename[64], *NS, alphaFile[128];
+  // char *flux_filename;
   float L, *arr, *arrarr[128]; // <- array of pointers to precip arrays
   float J[100][100];
   double Jext;
@@ -76,29 +79,77 @@ int main(int argc, char *argv[])
   int num_freqs;
 
   nancounter = 0;
-  // Get input parameters from command line
-  dir   = argv[1];
-  L_TARG = atof(argv[2]);
-  flux_filename = argv[3];
+  int opt =0;
+  int opt_index = 0;
+
+  // Default inputs:
+  char *dir = "outputs";
+  char *out_dir = "outputs";
+  char *flux_filename = "EQFLUXMA.dat";
+  float out_lat = 0;
+  float out_lon = 0;
+
+  // Parse input arguments:
+  static struct option long_options[] =
+  {
+      {"p_dir",       required_argument,    0, 'd'},
+      {"out_dir",     required_argument,    0, 'e'},
+      {"out_lat",     required_argument,    0, 'f'},
+      {"out_lon",     required_argument,    0, 'g'},
+      {"flux_file",   required_argument,    0, 'h'},
+      {0, 0, 0, 0}
+  };
+
+  while (opt != -1) {
+      opt = getopt_long (argc, argv, "d:e:f:g:h:", long_options, &opt_index);
+      // cout << "opt is " << opt << "\n";
+      switch(opt) {
+          case 0:
+          if (long_options[opt_index].flag != 0)      break;
+          case 'd':   // p_dir
+            dir = optarg;                             break;
+          case 'e':
+            out_dir = optarg;                         break;
+          case 'f':
+            out_lat  = atof(optarg);                  break;
+          case 'g':
+            out_lon = atof(optarg);                   break;
+          case 'h':
+            flux_filename = optarg;                   break;
+          case '?':
+               printf("\nUnknown option: %s\n",opt);  break;
+      }
+  }
 
 
-  
-  printf("DIRECTORY: %s\n",dir);
-  printf("L_TARG: %f\n",L_TARG);
-  printf("Flux file: %s\n",flux_filename);
-  
+
+
+  // Get L-shell at output:
+  L_TARG = round(100.*((R_E + H_IONO)/(R_E*pow(cos(D2R*out_lat),2))))/100.;
+
+
+  printf(" ------ 2D WIPP Code ------ \n");
+  printf("         calc_flux          \n");
+  printf(" -------------------------- \n\n");
+
+  printf("input directory:\t%s\n",dir);
+  printf("output directory:\t%s\n",out_dir);
+  printf("out lat:\t %g\tlon:\t%g\n",out_lat, out_lon);
+  printf("L-shell:\t%g\n",L_TARG);
+  printf("flux file:\t%s\n",flux_filename);
+
+
+
 
   printf("\n\aWill do %d time steps\n", NUM_STEPS);
 
 
-  freqs = get_freqs_at(dir, &num_freqs);
+  freqs = get_freqs_at(dir, out_lon, &num_freqs);
 
   printf("\n\aWill do %d frequencies\n",num_freqs);  
 
-  
-  // printf("\n\aWill do %d frequencies\n", numFreqs);
-  //numFreqs = 1;
-  sprintf( alphaFile, "%s/alpha_%g_%s", dir, L_TARG, "N" );
+
+  sprintf(alphaFile, "%s/alpha_%g_%s", out_dir, L_TARG, "N" );
   printf("alphaFile: %s\n",alphaFile);
   arr = getArr();
 
@@ -112,25 +163,30 @@ int main(int argc, char *argv[])
           // Initialize the array (if we're the first)
           if(i==0)  arrarr[k]=getArr();
 
-              sprintf(filename,"%s/p%s%d_%g.dat",dir,NS,freqs[i],L_TARG);
+              sprintf(filename,"%s/p%s_%g_%g_%d.dat",dir, NS, out_lat, out_lon, freqs[i]);
+              // sprintf(filename,"%s/p%s%d_%g.dat",dir,NS,freqs[i],L_TARG);
               // printf("i: %d, k: %d, filename: %s\n", i, k, filename);
               inPtr = fopen(filename, "r");
-              printf("opened %s, pointer is %d\n",filename,inPtr);
-              nin = fread(arr, sizeof(float), (NUM_E*NUM_STEPS), inPtr);
-              fclose(inPtr);
-      
-              // Add to rolling sum from previous files
-              updateArr( arrarr[k] , arr );
-
+              if (inPtr != NULL) {
+                printf("opened %s, pointer is %d\n",filename,inPtr);
+                nin = fread(arr, sizeof(float), NUM_E*NUM_STEPS, inPtr);
+                fclose(inPtr);
+                // printf("read %d values\n",nin);
+                // Add to rolling sum from previous files
+                updateArr( arrarr[k] , arr );
+              } else {
+                printf("could not open file at %s\n",filename);
+              }
             } // for(k ... )  N/S - hemisphere
 
       } // freqs
   
+
   // Compute flux for north and south
   for(k=0; k<2; k++) {
     NS = (k == 0) ? "N" : "S";
     printf("Calling compFlux... hemisphere = %s\n",NS);
-    compFlux(arrarr[k], L_TARG, k, dir, flux_filename);
+    compFlux(arrarr[k], out_lat, out_lon, k, out_dir, flux_filename);
   } // N/S - hemisphere
 
 
@@ -149,31 +205,27 @@ int main(int argc, char *argv[])
  *
  */
 
-void compFlux(float *arr, double L, int k, char *dir, char *flux_filename)
+void compFlux(float *arr, float out_lat, float out_lon, int k, char *dir, char *flux_filename)
 {
   FILE *phiPtr, *QPtr, *NPtr, *alphaPtr;
   int ei, ti, i, nout;
-  double mag, P, Q, epsm, alpha_eq, v, crunch;
+  double da_pk, P, Q, epsm, alpha_eq, v, crunch;
   double I=0.0, x, g, field, Phi_p, b=1.0, vcm, fcgs;
   double v_tot_arr[NUM_E], E_tot_arr[NUM_E], dE_arr[NUM_E], gamma;
   double Jdiff[NUM_E];
   float Phi_float, alpha, J[100][100];
   char *NS, PhiFile[128], QFile[128], NFile[128], alphaFile[128];
 
-  // float arg_in1;
-  // float arg_in2;
-  // float arg_in3;
-  // float arg1;
-  // float arg2;
-  // float arg3;
+  double t1, t2, t3, t4, t6;
+  double max_alpha = 0;
 
   // Open up Phi file for writing
   if(k==0) {NS = "N";} else {NS="S";}  
 
-  sprintf( PhiFile, "%s/phi_%g_%s", dir, L, NS );
-  sprintf( QFile,   "%s/Q_%g_%s", dir, L, NS );
-  sprintf( NFile,   "%s/N_%g_%s", dir, L, NS );
-  sprintf( alphaFile,   "%s/alpha_%g_%s", dir, L, NS );  
+  sprintf( PhiFile, "%sphi_%g_%g_%s.dat", dir, out_lat, out_lon, NS );
+  sprintf( QFile,   "%sQ_%g_%g_%s.dat", dir, out_lat, out_lon, NS );
+  sprintf( NFile,   "%sN_%g_%g_%s.dat", dir, out_lat, out_lon, NS );
+  sprintf( alphaFile,   "%salpha_%g_%g_%s.dat", dir, out_lat, out_lon, NS );  
 
   printf("writing %s\n", PhiFile);
 
@@ -187,13 +239,16 @@ void compFlux(float *arr, double L, int k, char *dir, char *flux_filename)
    exit(0);
   }
 
-
-  epsm = (1/L)*(R_E+H_IONO)/R_E;
-
-  crunch  = sqrt(1+3*(1-epsm))/pow(epsm,3) ;
-
-  alpha_eq  = asin(sqrt( 1/crunch ));
-
+  
+  epsm = (1/L_TARG)*(R_E+H_IONO)/R_E;
+  // (1/sin(alpha_lc)^2) -- geometric focusing term (Bortnik 5.2)
+  crunch  = sqrt(1+3*(1-epsm))/pow(epsm,3); 
+  // Loss-cone angle at equator:
+  alpha_eq  = asin(sqrt( 1.0/crunch ));
+  
+  printf("alpha_eq: %g\n",R2D*alpha_eq);
+  printf("crunch: %g\n",crunch);
+  // Load flux file:
   readJ(J, flux_filename);
 
   // Precalculate energy and velocity values
@@ -205,25 +260,23 @@ void compFlux(float *arr, double L, int k, char *dir, char *flux_filename)
     // Energy differential dE in keV
     dE_arr[i] = 1e-3 * pow(10, (E_EXP_BOT+ (DE_EXP/2))) * 
       exp(DE_EXP*i / log10(NAPe)) * DE_EXP / log10(NAPe);
-
-
   }
 
+  // Loop over energies:
   for(ei=0; ei<NUM_E; ei++) {
 
     if(ALPHA_DISTRIBUTION) {
+      // Suprathermal velocity distribution
+      // (I forget where this one is from -- should be consistent
+      //  with the damping code. --aps 12.2016)
+
       v = v_tot_arr[ei];
-      vcm = v*100;  // v in cm for distrib fn calculation
+      vcm = v*100;      // v in cm for distrib fn calculation
       gamma = 1.0/sqrt( 1 - v*v/(C*C) );
       fcgs =  4.9e5/pow( (vcm*gamma) ,4) - 
-    8.3e14/pow( (vcm*gamma) ,5) + 
-    5.4e23/pow( (vcm*gamma) ,6);
+              8.3e14/pow( (vcm*gamma) ,5) + 
+              5.4e23/pow( (vcm*gamma) ,6);
      
-
-
-
-      //fcgs = fcgs*50;
-      // fcgs = 7.034e26 / pow(vcm,6); //10^8/E^2 distribution
 
       b = (v*v/M_EL)*pow( sqrt(1 - (v*v)/(C*C)), 3) * 1.6e-8 * fcgs;
 
@@ -232,45 +285,76 @@ void compFlux(float *arr, double L, int k, char *dir, char *flux_filename)
       b = Jdiff[ei]*1000;
     }
 
-    //display values of b and E
-    // USEFUL BUT ANNOYING RIGHT NOW - 5/2015
-  //  printf("b = %f\tE = %f\n",b,E_tot_arr[ei]);
 
+
+
+    // Loop over timesteps:
     for(ti=0; ti<NUM_STEPS; ti++) {
       
       alpha = sqrt( arr[ei*NUM_STEPS+ti] );
 
+      if (alpha > max_alpha) { max_alpha = alpha; }
+
+      if (alpha > 0) {
+
+        // printf("ei: %d ti: %d alpha: %g\n",ei, ti, alpha);
+      }
       nout=fwrite(&alpha, sizeof(float), 1, alphaPtr);      
 
-      mag = 1.4142135623731*alpha;  // sqrt(2)*alpha_RMS = peak
-      
-      P = mag/2;             //[ alpha_lc - (alpha_lc-mag) ] /2
-      Q = alpha_eq - mag/2;  //[ alpha_lc + (alpha_lc-mag) ] /2
-      
+      // Peak change in pitch-angle at this time and energy:
+      da_pk = sqrt(2.0)*alpha;  // sqrt(2)*alpha_RMS = peak
+
+      // Integrate the distribution from (alpha = 0 to alpha_lc) 
+      // using Gaussian Quadrature (5th order)
+
+      // First we need to convert our limits from (alpha_lc - da_pk,  alpha_lc) to (0, 1):
+      P = da_pk/2.;             //[ alpha_lc - (alpha_lc-da_pk) ] /2
+      Q = alpha_eq - da_pk/2.;  //[ alpha_lc + (alpha_lc-da_pk) ] /2
+
       I = 0.0;
-      if(mag != 0) {
-       for(i=0; i<5; i++) {
-         x = P*t5[i] + Q ;
+
+
+      if(da_pk != 0) {
+        // Integrate wrt alpha:
+        for(i=0; i<5; i++) {
+          x = P*t5[i] + Q ;
 
           if(ALPHA_DISTRIBUTION) {
 
-           g = (P/PI)*sin(2.0*x)*(  asin((x-alpha_eq)/mag)+ (PI/2.0) );
+            // Square distribution
+            // g = (P/PI) * sin(2.0*x) * (asin((x-alpha_eq)/da_pk)+ (PI/2.0) );
+
+            // same thing - but avoids NaNs when da_pk is very very small:
+            g = (P/PI) * sin(2.0*x) * (asin(t5[i]/2. - 0.5) + PI/2.0);          
 
           } else {
-           
-            g = (P/PI)*sin(2.0*x)*((x - alpha_eq)*( asin((x-alpha_eq)/mag)+ (PI/2.0) ) +
-               sqrt(mag*mag-pow((x-alpha_eq),2)));
+            // S
+            // g = (P/PI)*sin(2.0*x)*((x - alpha_eq)*( asin((x-alpha_eq)/da_pk)+ (PI/2.0) ) +
+            //   sqrt(da_pk*da_pk-pow((x-alpha_eq),2)));
 
-          }; // Square
+            // same thing, but simplified to ditch numerical errors when t1 is small:
+            t1 = (x - alpha_eq);
+            t2 = fabs(da_pk)*sqrt(1 -0.25*pow(t5[i] - 1, 2));
+            g = (P/PI)*sin(2.0*x)*(t1*( asin(t5[i]/2. - 0.5)+ (PI/2.0) ) + t2);
+          }; 
 
-       I += ( beta5[i]*g );
-       } // for(i ... ) -> Gauss quad integration
-      } // if mag != 0
+      // if isnan(g) {
+      //   // printf("G ISNAN at t: %d e: %d alpha: %g g: %g i=%d\n", ti, ei, alpha, g, i);
+      //   // printf("x: %g alpha_eq: %g da_pk: %g P %g\n",x,alpha_eq, da_pk, P);
+      //   printf("t2: %g t3: %g diff: %g \n",t2,t3, fabs(t2 - t3));
+      //      };
+        I += ( beta5[i]*g );
+
+        } // for(i ... ) -> Gauss quad integration
+      } // if da_pk != 0
 
       Phi_p = PI*crunch*b*I;
-      Phi_float = ( float ) Phi_p;
 
-      //if isnan(I) { printf("I ISNAN\n"); };
+      // printf("I: %g\n",I);
+      Phi_float = ( float ) Phi_p;
+      
+      // if isnan(I) { printf("I ISNAN at t: %d e: %d alpha: %g g: %g i=%d\n", ti, ei, alpha, g, i); };
+
 
 
       if isnan(Phi_p) { 
@@ -287,17 +371,19 @@ void compFlux(float *arr, double L, int k, char *dir, char *flux_filename)
   fclose(alphaPtr);
 
   printf("Total NaNs: %i\n",nancounter);
-
+  printf("max pitch-angle deflection: %g deg\n",R2D*max_alpha);
 
 //   /// HEY AUSTIN, YOU HAVEN'T TESTED THIS PART YET (6.2.2016)
-//   // Now calculate Q and N
-//   // Need to integrate over E
-//   for(ti=0; ti<NUM_TIMES; ti++) {
-//    for(ei=0; ei<NUM_E; ei++) {
-//       Qarr[ti] += (float)( Phi_p * E_tot_arr[ei] * dE_arr[ei] * 1.602e-9);
-//       Narr[ti] += (float)( Phi_p * dE_arr[ei]); //eV->keV\
-//      } // ei
-//   }  // ti
+  // Now calculate Q and N
+  // Need to integrate over E
+  // float Qarr[NUM_E][NUM_TIMES];
+  // float Qarr[NUM_E][NUM_TIMES];
+  // for(ti=0; ti<NUM_TIMES; ti++) {
+  //  for(ei=0; ei<NUM_E; ei++) {
+  //     Qarr[ti] += (float)( Phi_p * E_tot_arr[ei] * dE_arr[ei] * 1.602e-9); // joules to milliergs
+  //     Narr[ti] += (float)( Phi_p * dE_arr[ei]); //eV->keV
+  //    } // ei
+  // }  // ti
 
 //   nout=fwrite(Qarr, sizeof(float), (NUM_TIMES), QPtr);
 //   if(nout!=NUM_LONGS*NUM_TIMES) printf("\n\aProblem writing Q\n");

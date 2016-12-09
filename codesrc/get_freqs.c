@@ -18,16 +18,18 @@
 
 typedef struct node {
     int freq;
-    float L;
+    // float L;
+    float lat;
+    float lon;
     struct node *ptr;
 } node;
 
 
 // Prototypes
-node* insert(node* head, int freq, float L);
+node* insert(node* head, int freq, float lat, float lon);
 void free_list(node *head);
 void print_list(node* head);
-int * get_freqs_at(char *directory, int *num_freqs);
+int * get_freqs_at(char *directory, float out_lon, int *num_freqs);
 
 // Search a directory for pN, pS files
 // Return a sorted list of frequencies to work with. BAM.
@@ -58,7 +60,7 @@ int * get_freqs_at(char *directory, int *num_freqs);
  * Assigns the total length of the array to num_freqs.
  * -----------------------------------------------
  */
-int * get_freqs_at(char *directory, int *num_freqs)
+int * get_freqs_at(char *directory, float out_lon, int *num_freqs)
 {
   DIR *dp;
   struct dirent *ep;     
@@ -66,7 +68,10 @@ int * get_freqs_at(char *directory, int *num_freqs)
   int n=0;
   int s=0;
   int i=0;
-  float L_N, L_S;
+  // float L_N, L_S;
+  float lat_N, lat_S;
+  float lon_N, lon_S;
+
   int freq_N, freq_S;
   // char *strname;
   int *freq_output;
@@ -79,22 +84,28 @@ int * get_freqs_at(char *directory, int *num_freqs)
   if (dp != NULL)
   {
     while (ep = readdir (dp)) {
-      if (sscanf(ep->d_name, "pN%d_%g.dat", &freq_N, &L_N)) {
+      // if (sscanf(ep->d_name, "pN%d_%g.dat", &freq_N, &L_N)) {
+      if (sscanf(ep->d_name, "pN_%g_%g_%d.dat", &lat_N, &lon_N, &freq_N)) {
         // printf("N: %d, %g\n",freq_N, L_N);
-        list_N = insert(list_N, freq_N, L_N);
-        n++;
+        // list_N = insert(list_N, freq_N, L_N);
+        if (lon_N == out_lon) {
+          list_N = insert(list_N, freq_N, lat_N, lon_N);
+          n++;
+        }
       }
 
-      if (sscanf(ep->d_name, "pS%d_%g.dat", &freq_S, &L_S)) {
+      if (sscanf(ep->d_name, "pS_%g_%g_%d.dat",&lat_S, &lon_S, &freq_S)) {
         // printf("S: %d, %g\n",freq_S, L_S);
-        list_S = insert(list_S, freq_S, L_S);
-        s++;
+        if (lon_S == out_lon) {
+          list_S = insert(list_S, freq_S, lat_S, lon_S);
+          s++;
+        }
       }
     }
 
     closedir (dp);
 
-    printf("n is: %d, s is: %d\n",n,s);
+    // printf("n is: %d, s is: %d\n",n,s);
 
     // print_list(list_N);
     // print_list(list_S);
@@ -141,13 +152,17 @@ int * get_freqs_at(char *directory, int *num_freqs)
 // -----------------------------------------------
 // A simple linked-list.
 // -----------------------------------------------
-node* insert(node* head, int freq, float L) {
+// node* insert(node* head, int freq, float L) {
+node* insert(node* head, int freq, float lat, float lon) {
+
     node *temp, *prev, *next;
 
 
     temp = (node*)malloc(sizeof(node));
     temp->freq = freq;
-    temp->L = L;
+    // temp->L = L;
+    temp->lat = lat;
+    temp->lon = lon;
     temp->ptr = NULL;
 
     if (!head) {
