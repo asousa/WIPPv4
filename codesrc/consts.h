@@ -68,6 +68,6 @@
 
 
 // For flux calculation:
-#define     ALPHA_DISTRIBUTION 0    // 1 for 'square' dist, 0 for 'ramp' dist.
+#define     FLUX_DISTRIBUTION 0    // 1 for 'square' dist, 0 for 'ramp' dist.
                                     // (See Bortnik, figure 5.8 (c) and (d))
 

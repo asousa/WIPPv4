@@ -10,12 +10,14 @@
 #
 #   V1.0. Seems to match the Matlab verson!
 #   V1.1  Started 6.1.2016, adapting to work with constants object
+#   v1.2  12.2016, added support for gzipped files (since it adds up fast)
 
 import os
 # import glob
 import re
 #import struct
 import numpy as np
+import gzip
 #from matplotlib import pyplot as plt
 
 def load_phi_files_L(dataDir, sc):
@@ -60,19 +62,22 @@ def load_phi_files_L(dataDir, sc):
     print "S NaNs: %d" % np.sum(np.isnan(S_arr))
     return N_arr, S_arr, L_vec
 
-def load_phi_files_latlon(dataDir, lon, sc):
-    # This version for files with L-shell in the filename:
+def load_phi_files_latlon(dataDir, lon, sc, zipped=False):
+    # This version for files with output latitude and longitude in the filename:
     
     # allfiles = os.listdir(os.getcwd() + '/' + dataDir)
     allfiles = os.listdir(dataDir)
-
-    n_files = sorted([f for f in allfiles if f.startswith('phi_') and f.endswith('_N.dat')])
-    s_files = sorted([f for f in allfiles if f.startswith('phi_') and f.endswith('_S.dat')])
+    if zipped:
+        n_files = sorted([f for f in allfiles if f.startswith('phi_') and f.endswith('_N.dat.gz')])
+        s_files = sorted([f for f in allfiles if f.startswith('phi_') and f.endswith('_S.dat.gz')])
+    else:
+        n_files = sorted([f for f in allfiles if f.startswith('phi_') and f.endswith('_N.dat')])
+        s_files = sorted([f for f in allfiles if f.startswith('phi_') and f.endswith('_S.dat')])
 
     if not n_files and not s_files:
         print "No phi files found!"
 
-    print n_files
+    # print n_files
 
     # L_n = sorted([float(f[4:(len(f) - 2)]) for f in n_files])
     # L_s = sorted([float(f[4:(len(f) - 2)]) for f in s_files])
@@ -99,12 +104,17 @@ def load_phi_files_latlon(dataDir, lon, sc):
 
         #for ind, filename in enumerate(n_files):
         for lat_ind, lat in enumerate(latvec):
-            # print "L: ",L
             
             # Binary files -- little-endian, 4-byte floats 
             dt = np.dtype('<f4')
-            phi_N = np.fromfile(os.path.join(dataDir,"phi_%g_%g_N.dat"%(lat, lon)),dtype=dt)
-            phi_S = np.fromfile(os.path.join(dataDir,"phi_%g_%g_S.dat"%(lat, lon)),dtype=dt)
+            if zipped:
+                gzf = gzip.open(os.path.join(dataDir,"phi_%g_%g_N.dat.gz"%(lat, lon)),'rb').read()
+                phi_N = np.fromstring(gzf, dtype=dt)
+                gzf = gzip.open(os.path.join(dataDir,"phi_%g_%g_S.dat.gz"%(lat, lon)),'rb').read()
+                phi_S = np.fromstring(gzf, dtype=dt)
+            else:
+                phi_N = np.fromfile(os.path.join(dataDir,"phi_%g_%g_N.dat"%(lat, lon)),dtype=dt)
+                phi_S = np.fromfile(os.path.join(dataDir,"phi_%g_%g_S.dat"%(lat, lon)),dtype=dt)
 
             N_arr[:,:,lat_ind] = phi_N.reshape(sc.NUM_E, sc.NUM_STEPS, order='c')
             S_arr[:,:,lat_ind] = phi_S.reshape(sc.NUM_E, sc.NUM_STEPS, order='c')

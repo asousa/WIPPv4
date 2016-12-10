@@ -10,7 +10,7 @@ import itertools
 import random
 import os
 from load_sim_constants import load_sim_constants
-
+import gzip
 # ------------------------------------------------
 # Loads all pN, pS files in a directory, sorted by frequency
 # returns: pN, pS (nFreqs x nTimes x nEnergies numpy arrays)
@@ -60,7 +60,6 @@ def load_pfiles_L(directory, L, fmin=0, fmax=10e10):
 
         # for binary-formatted files
         tmp_N = np.fromfile(os.path.join(directory,'pN%d_%g.dat'%(f,L)),dtype=np.dtype('<f4'))
-
         if (np.shape(tmp_N)[0]==sc.NUM_E*sc.NUM_STEPS):
             pN[f_ind, :,:] = tmp_N.reshape(sc.NUM_E, sc.NUM_STEPS, order='c')
         else:
@@ -88,7 +87,7 @@ from load_sim_constants import load_sim_constants
 # Loads all pN, pS files in a directory, sorted by frequency
 # returns: pN, pS (nFreqs x nTimes x nEnergies numpy arrays)
 # ------------------------------------------------
-def load_pfiles_latlon(directory, out_lat, out_lon, sc, fmin=0, fmax=10e10):
+def load_pfiles_latlon(directory, out_lat, out_lon, sc, fmin=0, fmax=10e10, zipped=False):
     # Get files, frequencies:
     d = os.listdir(directory)
 
@@ -102,7 +101,7 @@ def load_pfiles_latlon(directory, out_lat, out_lon, sc, fmin=0, fmax=10e10):
 
     p = re.compile("\d+")
     for s in d:
-        if s.endswith(".dat"):
+        if ( (zipped and s.endswith(".dat.gz")) or ((not zipped) and s.endswith(".dat"))):
             if s.startswith('pN'):
                 tmp = p.findall(s)
                 freqs_pN.append(int(tmp[2]))
@@ -134,18 +133,27 @@ def load_pfiles_latlon(directory, out_lat, out_lon, sc, fmin=0, fmax=10e10):
     # for f, l in zip(freqs, l_pN):
     for f_ind, f in enumerate([ff for ff in freqs if ff > fmin and ff < fmax]):
         # for binary-formatted files
-        tmp_N = np.fromfile(os.path.join(directory,'pN_%g_%g_%d.dat'%(out_lat, out_lon, f)),dtype=np.dtype('<f4'))
+        for s in ['N','S']:
+            fname = os.path.join(directory,'p%s_%g_%g_%d.dat'%(s, out_lat, out_lon, f));
+            if zipped:
+                gzfs = gzip.open('%s%s'%(fname,'.gz'),'rb').read()
+                tmp = np.fromstring(gzfs, dtype=np.dtype('<f4'))
+            else:
+                tmp = np.fromfile(fname,dtype=np.dtype('<f4'))
 
-        if (np.shape(tmp_N)[0]==sc.NUM_E*sc.NUM_STEPS):
-            pN[f_ind, :,:] = tmp_N.reshape(sc.NUM_E, sc.NUM_STEPS, order='c')
-        else:
-            print "no N data at %d"%f 
-            
-        tmp_S = np.fromfile(os.path.join(directory,'pS_%g_%g_%d.dat'%(out_lat, out_lon, f)),dtype=np.dtype('<f4'))
-        if (np.shape(tmp_S)[0]==sc.NUM_E*sc.NUM_STEPS):
-            pS[f_ind, :,:] = tmp_S.reshape(sc.NUM_E, sc.NUM_STEPS, order='c')
-        else:
-            print "no S data at %d"%f
+            if (np.shape(tmp)[0]==sc.NUM_E*sc.NUM_STEPS):
+                if s=='N':
+                    pN[f_ind, :,:] = tmp.reshape(sc.NUM_E, sc.NUM_STEPS, order='c')
+                else:
+                    pS[f_ind, :,:] = tmp.reshape(sc.NUM_E, sc.NUM_STEPS, order='c')
+            else:
+                print "no %s data at %d"%(s,f) 
+                
+        # tmp_S = np.fromfile(os.path.join(directory,'pS_%g_%g_%d.dat'%(out_lat, out_lon, f)),dtype=np.dtype('<f4'))
+        # if (np.shape(tmp_S)[0]==sc.NUM_E*sc.NUM_STEPS):
+        #     pS[f_ind, :,:] = tmp_S.reshape(sc.NUM_E, sc.NUM_STEPS, order='c')
+        # else:
+        #     print "no S data at %d"%f
 
         # For ASCII-formatted files
 #         pN.append(np.loadtxt(os.path.join(directory,"pN%d_%d.dat"%(f,L))))

@@ -65,13 +65,22 @@ freq_pairs = zip(freqs[0:], freqs[1:])
 # center_lats = np.arange(5,65,step=5)
 #center_lats = [5, 10, 15, 20, 30]
 center_lats = [15, 20, 25, 30, 35, 40, 45, 50]
-center_lon  = [0, 2, 5]
+center_lon  = 0
 
 out_lats = np.arange(20, 60)
-out_lons = [0] #np.arange(0,10, step=2)
+out_lons = [1,3,5,7,9,10]    #np.arange(0,12, step=2)
 #center_lats = [20, 30, 40, 50]
 # Input power to do:
 I0_list    = [-10e3]
+
+
+# Flux calculation settings:
+flux_dist = 0;  # 0: AE8 file
+                # 1: Bell 2002 suprathermal
+                # 2: 1
+alpha_dist= 0;  # 0: Ramp (series approx of sine dist)
+                # 1: Square
+
 
 # Relevant paths:
 root_dir = '/shared/users/asousa/WIPP/WIPPv4/'
@@ -79,7 +88,7 @@ code_dir = os.path.join(root_dir,'codesrc')
 ray_dir  = '/shared/users/asousa/WIPP/WIPPv4/rays/33f_kp0' # Location of ray files
 out_dir  = os.path.join(root_dir,'outputs','agu2016_kp0_v3')         # Where to assemble final results
 log_dir  = os.path.join(out_dir, 'logs')                      # Where to write log files
-flux_dir = os.path.join(out_dir, 'phi')                       # Where to write final flux files
+# flux_dir = os.path.join(out_dir, 'phi')                       # Where to write final flux files
 local_dir= os.path.join(os.path.expanduser("~"),'scatter_tmp') # Local directory on each node
 # local_dir = '/tmp/scatter_tmp';
 
@@ -122,6 +131,11 @@ if do_scattering:
   # # Prep output directory tree (root node only):
   if rank==0:
     print "----------- SCATTERING ------------"
+    print "Frequencies: ", freqs
+    print "Input Lats: ", center_lats
+    print "Output Lats: ", out_lats
+    print "Output Lons: ", out_lons
+    print "Input Pwrs: ", I0_list
 
     if not os.path.exists(out_dir):
       os.mkdir(out_dir)
@@ -215,13 +229,22 @@ if do_scattering:
 
       job_out_path = os.path.join(out_dir,"pwr_%g/in_%g/lat_%g"%(I0, center_lat, out_lat))
 
+
+      # Zip the output files:
+      n_filename = 'pN_%g_%g_%d'%(out_lat, out_lon, f_low)
+      os.system('gzip %s.dat'%n_filename);
+
+      s_filename = 'pS_%g_%g_%d'%(out_lat, out_lon, f_low)
+      os.system('gzip %s.dat'%s_filename)
+
       for attempt in range(3):
         try:
-          n_filename = 'pN_%g_%g_%d.dat'%(out_lat, out_lon, f_low)
-          shutil.copy(n_filename, "%s/%s"%(job_out_path, n_filename))          
+          # n_filename = 'pN_%g_%g_%d'%(out_lat, out_lon, f_low)
 
-          s_filename = 'pS_%g_%g_%d.dat'%(out_lat, out_lon, f_low)
-          shutil.copy(s_filename, "%s/%s"%(job_out_path, s_filename))
+          shutil.copy('%s.dat.gz'%n_filename, "%s/%s.dat.gz"%(job_out_path, n_filename))          
+
+          s_filename = 'pS_%g_%g_%d'%(out_lat, out_lon, f_low)
+          shutil.copy('%s.dat.gz'%s_filename, "%s/%s.dat.gz"%(job_out_path, s_filename))
 
           log_filename ="scatter_%g_%g_%g_%g_%g.log"%(I0, center_lat, out_lat, out_lon, f_low)
           shutil.copy(log_filename, "%s/%s"%(log_dir, log_filename))
@@ -263,22 +286,28 @@ if do_scattering:
 
 ## ----------------------------- calc_flux.c ---------------------------------------
 if do_flux:
-  print "----------- CALCULATING FLUX ------------"
-  # Generate task list:
-
+  
   if rank == 0:
+    print "----------- CALCULATING FLUX ------------"
+    # Generate task list:
+
     if not os.path.exists(out_dir):
       os.mkdir(out_dir)
     if not os.path.exists(log_dir):
       os.mkdir(log_dir)
-    if not os.path.exists(flux_dir):
-      os.mkdir(flux_dir)
-
 
     tasklist = [(w,x,y,z) for w,x,y,z in itertools.product(I0_list, center_lats, out_lats, out_lons)]
-  # tasklist = [(w,x,y) for w,x,y in itertools.product(I0_list, center_lats, L_targ_list)]
     # Adjacent frequencies take similar time to complete... shuffle to distribute nicely
     np.random.shuffle(tasklist)
+
+    # Set up output filetree
+    for I0 in I0_list:
+      for center_lat in center_lats:
+        flux_dir = os.path.join(out_dir,"pwr_%g/in_%g/phi"%(I0, center_lat))
+        if not os.path.exists(flux_dir):
+          os.mkdir(flux_dir)
+
+
     print "total tasks to do: ", len(tasklist)
   else:
     tasklist = None
@@ -306,6 +335,9 @@ if do_flux:
       out_lat = job[2]
       out_lon = job[3]
 
+      flux_dir = os.path.join(out_dir,"pwr_%g/in_%g/phi"%(I0, center_lat))
+      # if not os.path.exists(flux_dir):
+      #   os.mkdir(flux_dir)
 
       working_dir = os.path.join(local_dir,'flux_%g_%g_%g_%g/'%(np.abs(I0),center_lat, out_lat, out_lon))
       if os.path.exists(working_dir):
@@ -316,7 +348,7 @@ if do_flux:
 
       os.chdir(working_dir)
       print working_dir
-      os.system("gcc -o calc_flux %s/calc_flux.c -lm"%(code_dir))
+      os.system("gcc -o calc_flux %s/calc_flux.c -lm -lz"%(code_dir))
 
       # scatter_dir = os.path.join(out_dir,'pwr_%g/in_%g/out_%g'%(I0, center_lat, L_targ))
       scatter_dir = os.path.join(out_dir,"pwr_%g/in_%g/lat_%g"%(I0, center_lat, out_lat))
@@ -325,7 +357,8 @@ if do_flux:
 
       job_cmd = "./calc_flux --p_dir %s --out_dir %s "%(scatter_dir, working_dir) + \
                 "--out_lat %s --out_lon %s "%(out_lat, out_lon) + \
-                "--flux_file %s"%flux_file
+                "--flux_file %s --flux_dist %s "%(flux_file, flux_dist) + \
+                "--alpha_dist %s --zipped 1"%alpha_dist
 
       # job_cmd = "./calc_flux %s %g %s" %(scatter_dir, job[2], flux_file)
       print "Job command: ", job_cmd
@@ -340,17 +373,23 @@ if do_flux:
       file.close()
 
 
-      print "[%s/%d]:Completed: %s, %s, %s"%(host, rank, center_lat, out_lat, out_lon)
+      # Zip the output files:
+      n_filename = 'phi_%d_%d_N.dat'%(out_lat, out_lon)
+      os.system('gzip %s.dat'%n_filename);
+
+      s_filename = 'phi_%d_%d_S.dat'%(out_lat, out_lon)
+      os.system('gzip %s.dat'%s_filename)
+
 
       # Move completed files over to shared directory:
       # os.system("mv phi* %s"%(scatter_dir))
       for attempt in range(3):
         try:
-          n_filename = 'phi_%d_%d_N.dat'%(out_lat, out_lon)
-          shutil.copy(n_filename, "%s/%s"%(flux_dir, n_filename))          
+          # n_filename = 'phi_%d_%d_N.dat'%(out_lat, out_lon)
+          shutil.copy("%s.gz"%n_filename, "%s/%s.gz"%(flux_dir, n_filename))          
 
-          s_filename = 'phi_%d_%d_S.dat'%(out_lat, out_lon)
-          shutil.copy(s_filename, "%s/%s"%(flux_dir, s_filename))
+          # s_filename = 'phi_%d_%d_S.dat'%(out_lat, out_lon)
+          shutil.copy("%s.gz"%s_filename, "%s/%s.gz"%(flux_dir, s_filename))
 
           shutil.copy(log_filename, "%s/%s"%(log_dir, log_filename))
 
@@ -361,6 +400,8 @@ if do_flux:
         else:
           print "[%s/%d:Successfully copied files for (%g, %g)"%(host, rank, out_lat, out_lon)
           break
+
+      print "[%s/%d]:Completed: %s, %s, %s"%(host, rank, center_lat, out_lat, out_lon)
 
 
 

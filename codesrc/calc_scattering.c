@@ -368,7 +368,7 @@ L_TARG = round(100.*((R_E + H_IONO)/(R_E*pow(cos(D2R*out_lat),2))))/100.;
     dampR = (FILE *)readDamp( dampFileR, dampR, &TR, upper_freq);
     
     if(ptrL==NULL || ptrR==NULL) break;
-    printf("BL.lat[0]: %f, TL.lat[0]: %f]\n",BL.lat[0], TL.lat[0]);
+    printf("BL.lat[0]: %2.2f, TL.lat[0]: %2.2f\n",BL.lat[0], TL.lat[0]);
 
     // // Only do rays within LAT_SPREAD bounds
     if ( (fabs(BL.lat[0] - center_lat) <= LAT_SPREAD/2.0) &&
@@ -476,20 +476,6 @@ printf("dlat: %2.3f, dfreq: %2.3f, DIV_LAT_NUM: %2.3f, DIV_FREQ_NUM %2.3f, t_end
   // for(t=DT ; t<=t_end ; t+= DT ) {
   for(t=T_STEP ; t<= t_end ; t+= T_STEP) {
 
-    // printf("now doing t= %g\n", t);
-
-    // // Do both current and previous steps (no funny business)
-    // t_prev = t - T_STEP;
-    // BL_l = interpPt( BL->tg, BL->l_sh, BL->numSteps, t);
-    // TL_l = interpPt( TL->tg, TL->l_sh, TL->numSteps, t);
-    // BR_l = interpPt( BR->tg, BR->l_sh, BR->numSteps, t);
-    // TR_l = interpPt( TR->tg, TR->l_sh, TR->numSteps, t);
-
-    // BL_l_prev = interpPt( BL->tg, BL->l_sh, BL->numSteps,t_prev);
-    // TL_l_prev = interpPt( TL->tg, TL->l_sh, TL->numSteps,t_prev);
-    // BR_l_prev = interpPt( BR->tg, BR->l_sh, BR->numSteps,t_prev);
-    // TR_l_prev = interpPt( TR->tg, TR->l_sh, TR->numSteps,t_prev);
-
     if(t==T_STEP) { 
       // this is first time step, calc prev interpolated L
       BL_l_prev = interpPt( BL->tg, BL->l_sh, BL->numSteps, 0);
@@ -513,39 +499,25 @@ printf("dlat: %2.3f, dfreq: %2.3f, DIV_LAT_NUM: %2.3f, DIV_FREQ_NUM %2.3f, t_end
 
     if( outsideL(BL_l, TL_l, BR_l, TR_l, &iTarg)  &&
     outsideL(BL_l_prev, TL_l_prev, BR_l_prev, TR_l_prev, &iTarg) ) { 
-      
       // then, they're all outside L-shell of interest
-    
     } else { 
-        // printf("checking...t = %2.3f\n",t);
-      // calculate interpolated latitudes of guiding points
 
-
-        // // Do both current and previous timesteps:
-        // BL_lat = interpPt( BL->tg, BL->lat, BL->numSteps, t); 
-        // TL_lat = interpPt( TL->tg, TL->lat, TL->numSteps, t);
-        // BR_lat = interpPt( BR->tg, BR->lat, BR->numSteps, t);
-        // TR_lat = interpPt( TR->tg, TR->lat, TR->numSteps, t);
-
-        // BL_lat_prev = interpPt( BL->tg, BL->lat, BL->numSteps, t_prev); 
-        // TL_lat_prev = interpPt( TL->tg, TL->lat, TL->numSteps, t_prev);
-        // BR_lat_prev = interpPt( BR->tg, BR->lat, BR->numSteps, t_prev);
-        // TR_lat_prev = interpPt( TR->tg, TR->lat, TR->numSteps, t_prev);
-        // lat_time = t;
       t_prev = t- T_STEP;
 
       if( lat_time == t_prev ) {  
       // then lats already worked out at previous time step
-          BL_lat_prev = BL_lat;
-          TL_lat_prev = TL_lat;
-          BR_lat_prev = BR_lat;
-          TR_lat_prev = TR_lat;
-        } else {
-          BL_lat_prev = interpPt( BL->tg, BL->lat, BL->numSteps, t_prev); 
-          TL_lat_prev = interpPt( TL->tg, TL->lat, TL->numSteps, t_prev);
-          BR_lat_prev = interpPt( BR->tg, BR->lat, BR->numSteps, t_prev);
-          TR_lat_prev = interpPt( TR->tg, TR->lat, TR->numSteps, t_prev); 
-        }
+        BL_lat_prev = BL_lat;
+        TL_lat_prev = TL_lat;
+        BR_lat_prev = BR_lat;
+        TR_lat_prev = TR_lat;
+      } else {
+        BL_lat_prev = interpPt( BL->tg, BL->lat, BL->numSteps, t_prev); 
+        TL_lat_prev = interpPt( TL->tg, TL->lat, TL->numSteps, t_prev);
+        BR_lat_prev = interpPt( BR->tg, BR->lat, BR->numSteps, t_prev);
+        TR_lat_prev = interpPt( TR->tg, TR->lat, TR->numSteps, t_prev); 
+      }
+
+
       BL_lat = interpPt( BL->tg, BL->lat, BL->numSteps, t); 
       TL_lat = interpPt( TL->tg, TL->lat, TL->numSteps, t);
       BR_lat = interpPt( BR->tg, BR->lat, BR->numSteps, t);
@@ -553,8 +525,9 @@ printf("dlat: %2.3f, dfreq: %2.3f, DIV_LAT_NUM: %2.3f, DIV_FREQ_NUM %2.3f, t_end
       lat_time = t;
 
 
-
     // do interpolations within the 4 rays!
+
+    // printf("pre-interp: t: %g tlf: %ld trf: %ld\n",t, TL->f, TR->f);
 
     for(div_lat=0; div_lat<1; div_lat += 1.0/DIV_LAT_NUM) {
       for(div_freq=0; div_freq<1; div_freq += 1.0/DIV_FREQ_NUM) {
@@ -707,7 +680,7 @@ void checkCross(double BL_fact, double TL_fact, double BR_fact,
       
       // ray frequency
       f = TL->f + div_freq*( TR->f - TL->f );
-
+      // printf("inside: t: %g tlf: %ld trf: %ld\n",t, TL->f, TR->f);
       // ray launch latitude
       ll = BL->lat[0] + div_lat*( TL->lat[0] - BL->lat[0] );
       
@@ -750,7 +723,7 @@ void checkCross(double BL_fact, double TL_fact, double BR_fact,
       // print information to file if greater than 1e-6 of initial pwr
       avePwr = ( TL->pwr[0] + BL->pwr[0] + TR->pwr[0] + BR->pwr[0] )/4.0;
       // fprintf(logfile,"CROSSING: %2.8f %2.8f %2.8f %2.8f %2.8f\n",t,r1ray,r2ray,lat_int_prev,lat_int);
-      printf("t: %g f: %g cell_pwr: %g\n",t, f, pwr);
+      // printf("crossing at t: %g f: %ld cell_pwr: %g\n",t, f, pwr);
       if (avePwr > WAVE_PWR_THRESH) {
         addToArr(lat_arr, t, f, pwr, psi, mu, EA_i, iTarg, stixP, stixR, stixL);
       }
@@ -1326,7 +1299,8 @@ double ltgPwr_2d(float i0, float flash_lat, float flash_lon, float ray_lat, floa
   double S, S_vert;
   double attn_factor;
   double w, w_sq;
-  
+  double tot_pwr;
+
   gc_distance = haversine_distance(flash_lat, flash_lon, ray_lat, ray_lon);
 
   dist_tot = hypot(gc_distance, H_IONO);
@@ -1341,14 +1315,18 @@ double ltgPwr_2d(float i0, float flash_lat, float flash_lon, float ray_lat, floa
   // Ionosphere absorption model
   attn_factor = pow(10,-(ionoAbsorp(ray_lat,f)/10)  );
   S_vert = S_vert * attn_factor;
-  printf("\ni0: %2.3f,  f: %ld, dist_tot: %2.3f, xi: %2.3f, S_vert: %e\n",
-            i0,         f,      dist_tot,        xi,        S_vert);
- 
-
+  
   // S is in units of w/m^2/hz; integrate across latitude separation,
   // frequency separation, and implicitly over 1-meter slice in longitude
   // to get the total input power, in Watts, at this ray.
-  return ( S_vert * dlat*D2R*(R_E+H_IONO) * dfreq * 0.87788331); 
+  tot_pwr =  S_vert * dlat*D2R*(R_E+H_IONO) * dfreq * 0.87788331;
+
+  printf("i0: %2.3f,  f: %ld, dist_tot: %2.3f, xi: %2.3f, S_vert: %e, tot_pwr: %g\n",
+            i0,         f,      dist_tot,        xi,        S_vert,     tot_pwr);
+ 
+
+
+  return tot_pwr; 
 
 }
 
@@ -1697,9 +1675,9 @@ FILE  *readFile( char *fileName, FILE *filePtr, rayT *ray, long f, float center_
   // Determine the center of the lightning, i.e. source lat
   ray->center_lat = center_lat;
 
-  printf("num steps: %d, t_end: %2.5f\n",ray->numSteps,ray->tg[(i-2)]);
+  // printf("num steps: %d, t_end: %2.5f\n",ray->numSteps,ray->tg[(i-2)]);
 
-  printf("\nNow reading, f: %d, lat: %2.3f\n",ray->f, ray->lat[0]);
+  // printf("\nNow reading, f: %d, lat: %2.3f\n",ray->f, ray->lat[0]);
 
   return filePtr; 
 }

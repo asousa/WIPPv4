@@ -6,6 +6,7 @@
 #include "consts.h"
 #include "get_freqs.c"
 #include <getopt.h>
+#include <zlib.h>
 
 /* A cleaned-up version of calcFlux.c.
  * Started 5/25/2016, Austin Sousa -- asousa@stanford.edu
@@ -42,13 +43,17 @@ double beta5[] ={0.56888889, 0.47862867,  0.47862867, 0.23692689,  0.23692689};
 double t5[] =   {0.,         0.53846931, -0.53846931, 0.90617985, -0.90617985};
 
 
+
+
+
 // -----------------------------------------------
 // PROTOTYPES
 // -----------------------------------------------
 
 float *getArr(void);
 void updateArr(float *arr1, float *arr2);
-void compFlux(float *arr, float out_lat, float out_lon, int k, char *dir, char *flux_filename);
+void compFlux(float *arr, float out_lat, float out_lon, int k, char *dir,
+              char *flux_filename, int flux_dist, int alpha_dist);
 void readJ(float J[][100], char *filename);
 double getJdiff(float J[][100], double E, double alpha_lc);
 
@@ -83,12 +88,14 @@ int main(int argc, char *argv[])
   int opt_index = 0;
 
   // Default inputs:
-  char *dir = "outputs";
-  char *out_dir = "outputs";
+  char *dir = "outputs/";
+  char *out_dir = "outputs/";
   char *flux_filename = "EQFLUXMA.dat";
   float out_lat = 0;
   float out_lon = 0;
-
+  int zipped = 0;
+  int flux_dist = 0;
+  int alpha_dist = 0;
   // Parse input arguments:
   static struct option long_options[] =
   {
@@ -97,11 +104,14 @@ int main(int argc, char *argv[])
       {"out_lat",     required_argument,    0, 'f'},
       {"out_lon",     required_argument,    0, 'g'},
       {"flux_file",   required_argument,    0, 'h'},
+      {"zipped",      required_argument,    0, 'j'},
+      {"flux_dist",   required_argument,    0, 'k'},
+      {"alpha_dist",  required_argument,    0, 'l'},
       {0, 0, 0, 0}
   };
 
   while (opt != -1) {
-      opt = getopt_long (argc, argv, "d:e:f:g:h:", long_options, &opt_index);
+      opt = getopt_long (argc, argv, "d:e:f:g:h:j:", long_options, &opt_index);
       // cout << "opt is " << opt << "\n";
       switch(opt) {
           case 0:
@@ -116,6 +126,12 @@ int main(int argc, char *argv[])
             out_lon = atof(optarg);                   break;
           case 'h':
             flux_filename = optarg;                   break;
+          case 'j':
+            zipped = atoi(optarg);                    break;
+          case 'k':
+            flux_dist = atoi(optarg);                 break;
+          case 'l':
+            alpha_dist = atoi(optarg);                break;
           case '?':
                printf("\nUnknown option: %s\n",opt);  break;
       }
@@ -137,6 +153,8 @@ int main(int argc, char *argv[])
   printf("out lat:\t %g\tlon:\t%g\n",out_lat, out_lon);
   printf("L-shell:\t%g\n",L_TARG);
   printf("flux file:\t%s\n",flux_filename);
+  printf("flux dist:\t%d\n",flux_dist);
+  printf("alpha dist:\t%d\n",alpha_dist);
 
 
 
@@ -149,8 +167,8 @@ int main(int argc, char *argv[])
   printf("\n\aWill do %d frequencies\n",num_freqs);  
 
 
-  sprintf(alphaFile, "%s/alpha_%g_%s", out_dir, L_TARG, "N" );
-  printf("alphaFile: %s\n",alphaFile);
+  // sprintf(alphaFile, "%s/alpha_%g_%s", out_dir, L_TARG, "N" );
+  // printf("alphaFile: %s\n",alphaFile);
   arr = getArr();
 
 
@@ -163,19 +181,34 @@ int main(int argc, char *argv[])
           // Initialize the array (if we're the first)
           if(i==0)  arrarr[k]=getArr();
 
-              sprintf(filename,"%s/p%s_%g_%g_%d.dat",dir, NS, out_lat, out_lon, freqs[i]);
               // sprintf(filename,"%s/p%s%d_%g.dat",dir,NS,freqs[i],L_TARG);
               // printf("i: %d, k: %d, filename: %s\n", i, k, filename);
-              inPtr = fopen(filename, "r");
-              if (inPtr != NULL) {
-                printf("opened %s, pointer is %d\n",filename,inPtr);
-                nin = fread(arr, sizeof(float), NUM_E*NUM_STEPS, inPtr);
-                fclose(inPtr);
-                // printf("read %d values\n",nin);
-                // Add to rolling sum from previous files
-                updateArr( arrarr[k] , arr );
+              if (zipped) {
+                // Zipped phi files
+                sprintf(filename,"%s/p%s_%g_%g_%d.dat.gz",dir, NS, out_lat, out_lon, freqs[i]);
+                inPtr = gzopen(filename, "rb");
+                if (inPtr != NULL) {
+                  nin = gzread(inPtr, arr, sizeof(float)*NUM_E*NUM_STEPS);
+                  gzclose(inPtr);
+                  printf("opened %s, read %d vals\n",filename,nin);
+                  updateArr( arrarr[k] , arr );
+                } else {
+                  printf("could not open file at %s\n",filename);
+                }
               } else {
-                printf("could not open file at %s\n",filename);
+                // Uncompressed phi files
+                sprintf(filename,"%s/p%s_%g_%g_%d.dat",dir, NS, out_lat, out_lon, freqs[i]);
+                inPtr = fopen(filename, "r");
+                if (inPtr != NULL) {
+                  nin = fread(arr, sizeof(float), NUM_E*NUM_STEPS, inPtr);
+                  fclose(inPtr);
+                  printf("opened %s, read %d vals\n",filename,nin);
+                  // printf("read %d values\n",nin);
+                  // Add to rolling sum from previous files
+                  updateArr( arrarr[k] , arr );
+                } else {
+                  printf("could not open file at %s\n",filename);
+                }
               }
             } // for(k ... )  N/S - hemisphere
 
@@ -186,7 +219,7 @@ int main(int argc, char *argv[])
   for(k=0; k<2; k++) {
     NS = (k == 0) ? "N" : "S";
     printf("Calling compFlux... hemisphere = %s\n",NS);
-    compFlux(arrarr[k], out_lat, out_lon, k, out_dir, flux_filename);
+    compFlux(arrarr[k], out_lat, out_lon, k, out_dir, flux_filename, flux_dist, alpha_dist);
   } // N/S - hemisphere
 
 
@@ -205,7 +238,8 @@ int main(int argc, char *argv[])
  *
  */
 
-void compFlux(float *arr, float out_lat, float out_lon, int k, char *dir, char *flux_filename)
+void compFlux(float *arr, float out_lat, float out_lon, int k, char *dir, 
+              char *flux_filename, int flux_dist, int alpha_dist)
 {
   FILE *phiPtr, *QPtr, *NPtr, *alphaPtr;
   int ei, ti, i, nout;
@@ -264,29 +298,33 @@ void compFlux(float *arr, float out_lat, float out_lon, int k, char *dir, char *
 
   // Loop over energies:
   for(ei=0; ei<NUM_E; ei++) {
-
-    if(ALPHA_DISTRIBUTION) {
-      // Suprathermal velocity distribution
-      // (I forget where this one is from -- should be consistent
-      //  with the damping code. --aps 12.2016)
-
-      v = v_tot_arr[ei];
-      vcm = v*100;      // v in cm for distrib fn calculation
-      gamma = 1.0/sqrt( 1 - v*v/(C*C) );
-      fcgs =  4.9e5/pow( (vcm*gamma) ,4) - 
-              8.3e14/pow( (vcm*gamma) ,5) + 
-              5.4e23/pow( (vcm*gamma) ,6);
      
-
-      b = (v*v/M_EL)*pow( sqrt(1 - (v*v)/(C*C)), 3) * 1.6e-8 * fcgs;
-
-      // b = 1e8 / pow(E_tot_arr[i],2);
-    } else {
-      b = Jdiff[ei]*1000;
-    }
-
-
-
+    // Get flux magnitude at this energy and L-shell:
+    switch(flux_dist) {
+      case 0:
+        // AE8-file distribution
+        b = Jdiff[ei]*1000.;
+        break;
+      case 1:
+        // Suprathermal flux distribution
+        // (Bortnik 5.4, Bell 2002 distribution)
+        v = v_tot_arr[ei];
+        vcm = v*100;      // v in cm for distrib fn calculation
+        gamma = 1.0/sqrt( 1 - v*v/(C*C) );
+        fcgs =  4.9e5/pow( (vcm*gamma) ,4) - 
+                8.3e14/pow( (vcm*gamma) ,5) + 
+                5.4e23/pow( (vcm*gamma) ,6);
+     
+        b = (v*v/M_EL)*pow( sqrt(1 - (v*v)/(C*C)), 3) * 1.6e-8 * fcgs;
+        break;
+      case 2:
+        // Flat distribution (for 'propensity' study)
+        b = 1.0; 
+        break;
+      default: 
+        printf("no flux distribution selected!\n");
+        exit(0);
+      }
 
     // Loop over timesteps:
     for(ti=0; ti<NUM_STEPS; ti++) {
@@ -315,28 +353,52 @@ void compFlux(float *arr, float out_lat, float out_lon, int k, char *dir, char *
 
 
       if(da_pk != 0) {
+
         // Integrate wrt alpha:
         for(i=0; i<5; i++) {
           x = P*t5[i] + Q ;
 
-          if(ALPHA_DISTRIBUTION) {
+          // Select which distribution function in pitch angle to use:
+          switch(flux_dist) {
+            case 0:
+              // Sine (ramp) distribution
+              // g = (P/PI)*sin(2.0*x)*((x - alpha_eq)*( asin((x-alpha_eq)/da_pk)+ (PI/2.0) ) +
+              //   sqrt(da_pk*da_pk-pow((x-alpha_eq),2)));
+              // same thing, but simplified to ditch numerical errors when t1 is small:
+              t1 = (x - alpha_eq);
+              t2 = fabs(da_pk)*sqrt(1 -0.25*pow(t5[i] - 1, 2));
+              g = (P/PI)*sin(2.0*x)*(t1*( asin(t5[i]/2. - 0.5)+ (PI/2.0) ) + t2);
+              break;
+            case 1:
+              // Square distribution
+              // g = (P/PI) * sin(2.0*x) * (asin((x-alpha_eq)/da_pk)+ (PI/2.0) );
+              // same thing - but avoids NaNs when da_pk is very very small:
+              g = (P/PI) * sin(2.0*x) * (asin(t5[i]/2. - 0.5) + PI/2.0);   
+              break;
+            default:
+              printf("no pitch-angle distribution selected\n");
+              exit(0);
+            }
+          
 
-            // Square distribution
-            // g = (P/PI) * sin(2.0*x) * (asin((x-alpha_eq)/da_pk)+ (PI/2.0) );
+          // if(ALPHA_DISTRIBUTION) {
 
-            // same thing - but avoids NaNs when da_pk is very very small:
-            g = (P/PI) * sin(2.0*x) * (asin(t5[i]/2. - 0.5) + PI/2.0);          
+          //   // Square distribution
+          //   // g = (P/PI) * sin(2.0*x) * (asin((x-alpha_eq)/da_pk)+ (PI/2.0) );
 
-          } else {
-            // S
-            // g = (P/PI)*sin(2.0*x)*((x - alpha_eq)*( asin((x-alpha_eq)/da_pk)+ (PI/2.0) ) +
-            //   sqrt(da_pk*da_pk-pow((x-alpha_eq),2)));
+          //   // same thing - but avoids NaNs when da_pk is very very small:
+          //   g = (P/PI) * sin(2.0*x) * (asin(t5[i]/2. - 0.5) + PI/2.0);          
 
-            // same thing, but simplified to ditch numerical errors when t1 is small:
-            t1 = (x - alpha_eq);
-            t2 = fabs(da_pk)*sqrt(1 -0.25*pow(t5[i] - 1, 2));
-            g = (P/PI)*sin(2.0*x)*(t1*( asin(t5[i]/2. - 0.5)+ (PI/2.0) ) + t2);
-          }; 
+          // } else {
+          //   // S
+          //   // g = (P/PI)*sin(2.0*x)*((x - alpha_eq)*( asin((x-alpha_eq)/da_pk)+ (PI/2.0) ) +
+          //   //   sqrt(da_pk*da_pk-pow((x-alpha_eq),2)));
+
+          //   // same thing, but simplified to ditch numerical errors when t1 is small:
+          //   t1 = (x - alpha_eq);
+          //   t2 = fabs(da_pk)*sqrt(1 -0.25*pow(t5[i] - 1, 2));
+          //   g = (P/PI)*sin(2.0*x)*(t1*( asin(t5[i]/2. - 0.5)+ (PI/2.0) ) + t2);
+          // }; 
 
       // if isnan(g) {
       //   // printf("G ISNAN at t: %d e: %d alpha: %g g: %g i=%d\n", ti, ei, alpha, g, i);
